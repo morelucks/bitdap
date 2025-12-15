@@ -1,7 +1,6 @@
 ## Bitdap Pass – Tiered Membership NFT on Stacks
 
-**Bitdap Pass** is a Clarity smart contract that defines a **tiered NFT membership collection** on the Stacks blockchain.
-Each NFT represents an access pass that off-chain services or other contracts can use to gate features, communities, or content.
+Bitdap Pass is a tiered NFT membership system built on the Stacks blockchain. It uses Clarity smart contracts to issue non-fungible tokens that represent different membership levels—Basic, Pro, and VIP. Each NFT serves as an on-chain access pass that applications, bots, or other services can read to gate features, communities, or content based on a holder’s tier. The contract focuses on secure ownership, tier metadata, and safe minting and transfer logic, while off-chain systems handle what each tier unlocks.
 
 ### Concept
 
