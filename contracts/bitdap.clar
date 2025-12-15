@@ -67,7 +67,7 @@
 ;;
 
 ;; read only functions
-;;
+;; - Will expose views into ownership, metadata, and supply statistics.
 
 ;; private functions
 ;;
