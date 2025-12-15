@@ -61,6 +61,33 @@ clarinet check
 clarinet test
 ```
 
+### Deploying to Testnet with Environment Variables
+
+Bitdap uses Clarinet's `deployments` workflow and a testnet mnemonic provided via an environment variable, not committed files.
+
+1. Create a local `.env` file (this file is gitignored) and set your testnet mnemonic:
+
+```bash
+cd bitdap
+echo 'TESTNET_MNEMONIC="your 24-word testnet seed phrase here"' >> .env
+export $(grep -v '^#' .env | xargs)
+```
+
+2. Deploy to **testnet** using the helper script:
+
+```bash
+./deploy-testnet.sh
+```
+
+This script:
+- Renders `settings/Testnet.toml` from `settings/Testnet.template.toml` using `TESTNET_MNEMONIC`
+- Runs `clarinet deployments generate --testnet --medium-cost`
+- Runs `clarinet deployments apply --testnet`
+- Deletes the generated `settings/Testnet.toml` when finished
+
+Once the deployment completes, Clarinet will print the contract identifier
+you can use on the Stacks testnet explorer (e.g. `ST...deployer.bitdap`).
+
 ### Milestones
 
 The contract is being developed in clear, incremental milestones:
