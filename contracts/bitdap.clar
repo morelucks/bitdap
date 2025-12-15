@@ -34,7 +34,13 @@
 (define-constant TIER-VIP   u3)
 
 ;; data vars
-;;
+;; - Global counters for token-ids and total supply.
+
+;; Next token-id to mint (starts at u1).
+(define-data-var next-token-id uint u1)
+
+;; Total number of Bitdap Pass NFTs currently in circulation.
+(define-data-var total-supply uint u0)
 
 ;; data maps
 ;;
