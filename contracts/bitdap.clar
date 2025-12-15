@@ -18,10 +18,12 @@
 ;; - To be defined in later milestones (e.g., SIP-009 NFT trait implementation).
 
 ;; token definitions
+;; - Bitdap Pass uses uint token-ids (u1, u2, ...) to identify each NFT.
+;; - Each token-id is associated with exactly one owner and one tier.
 ;;
 
 ;; constants
-;;
+;; - Collection-wide configuration and tier identifiers.
 
 ;; data vars
 ;;
