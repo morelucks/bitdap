@@ -80,6 +80,9 @@
 ;;   users can only mint passes for themselves.
 ;; - Enforces global and per-tier maximum supplies.
 ;; - Returns (ok token-id) on success, or an error constant on failure.
+(define-read-only (get-max-supply)
+  MAX-SUPPLY)
+
 (define-public (mint-pass (tier uint) (uri (optional (string-utf8 256))))
   (begin
     ;; Validate tier first.
