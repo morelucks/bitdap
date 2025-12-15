@@ -43,7 +43,22 @@
 (define-data-var total-supply uint u0)
 
 ;; data maps
-;;
+;; - Storage for token ownership, metadata, and per-tier supply.
+
+;; token-id -> owner principal
+(define-map token-owners
+  { token-id: uint }
+  { owner: principal })
+
+;; token-id -> metadata (tier and optional off-chain URI)
+(define-map token-metadata
+  { token-id: uint }
+  { tier: uint, uri: (optional (string-utf8 256)) })
+
+;; tier -> current supply for that tier
+(define-map tier-supplies
+  { tier: uint }
+  { supply: uint })
 
 ;; public functions
 ;;
