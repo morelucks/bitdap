@@ -25,6 +25,14 @@
 ;; constants
 ;; - Collection-wide configuration and tier identifiers.
 
+(define-constant ERR-INVALID-TIER (err u100))
+(define-constant ERR-NOT-FOUND (err u101))
+
+;; Tiers are represented as uints for compact on-chain storage.
+(define-constant TIER-BASIC u1)
+(define-constant TIER-PRO   u2)
+(define-constant TIER-VIP   u3)
+
 ;; data vars
 ;;
 
