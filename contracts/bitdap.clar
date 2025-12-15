@@ -1,13 +1,13 @@
 ;; title: Bitdap Pass
 ;; version: 0.1.0
-;; summary: Bitdap Pass – tiered membership NFT collection on Stacks.
+;; summary: Bitdap Pass - tiered membership NFT collection on Stacks.
 ;; description: >
 ;;   Bitdap Pass is a non-fungible token (NFT) collection that represents
 ;;   access passes to the Bitdap ecosystem. Each pass belongs to a tier
 ;;   (Basic, Pro, or VIP), which can be used by off-chain services or
 ;;   other contracts to gate features and experiences.
 ;;
-;;   Milestone 1 – Concept & Rules:
+;;   Milestone 1 - Concept & Rules:
 ;;   - Collection name: Bitdap Pass
 ;;   - Tiers: Basic, Pro, VIP
 ;;   - 1 owner per token-id, non-fractional NFTs
@@ -23,15 +23,27 @@
 ;;
 
 ;; constants
-;; - Collection-wide configuration and tier identifiers.
+;; - Collection-wide configuration, tier identifiers, and error codes.
 
+;; Error codes
 (define-constant ERR-INVALID-TIER (err u100))
 (define-constant ERR-NOT-FOUND (err u101))
+(define-constant ERR-NOT-OWNER (err u102))
+(define-constant ERR-SELF-TRANSFER (err u103))
+(define-constant ERR-MAX-SUPPLY (err u104))
+(define-constant ERR-MAX-TIER-SUPPLY (err u105))
 
 ;; Tiers are represented as uints for compact on-chain storage.
 (define-constant TIER-BASIC u1)
 (define-constant TIER-PRO   u2)
 (define-constant TIER-VIP   u3)
+
+;; Collection-wide and per-tier maximum supplies.
+;; These are conservative defaults that can be adjusted in future versions.
+(define-constant MAX-SUPPLY      u10000)
+(define-constant MAX-BASIC-SUPPLY u7000)
+(define-constant MAX-PRO-SUPPLY   u2500)
+(define-constant MAX-VIP-SUPPLY   u500)
 
 ;; data vars
 ;; - Global counters for token-ids and total supply.
@@ -61,14 +73,133 @@
   { supply: uint })
 
 ;; public functions
-;; - Core NFT operations (mint, transfer, burn) will be added in later milestones.
+;; - Core NFT operations: mint, transfer, burn.
 
-;; public functions
-;;
+;; Mint a new Bitdap Pass NFT for the caller in the given tier.
+;; - The recipient is always tx-sender for now; this keeps permissions simple:
+;;   users can only mint passes for themselves.
+;; - Enforces global and per-tier maximum supplies.
+;; - Returns (ok token-id) on success, or an error constant on failure.
+(define-public (mint-pass (tier uint) (uri (optional (string-utf8 256))))
+  (begin
+    ;; Validate tier first.
+    (if (not (is-valid-tier tier))
+        ERR-INVALID-TIER
+        (let
+          (
+            (current-total (var-get total-supply))
+            (new-total (+ current-total u1))
+          )
+          ;; Check global max supply.
+          (if (> new-total MAX-SUPPLY)
+              ERR-MAX-SUPPLY
+              (let
+                (
+                  (tier-row (default-to { supply: u0 }
+                                        (map-get? tier-supplies { tier: tier })))
+                  (tier-supply (get supply tier-row))
+                  (new-tier-supply (+ tier-supply u1))
+                )
+                ;; Check per-tier max supply.
+                (if (is-tier-over-max? tier new-tier-supply)
+                    ERR-MAX-TIER-SUPPLY
+                    (let
+                      (
+                        (token-id (var-get next-token-id))
+                        (recipient tx-sender)
+                      )
+                      (begin
+                        ;; Write ownership and metadata.
+                        (map-set token-owners
+                          { token-id: token-id }
+                          { owner: recipient })
+                        (map-set token-metadata
+                          { token-id: token-id }
+                          { tier: tier, uri: uri })
+                        ;; Update counters.
+                        (map-set tier-supplies
+                          { tier: tier }
+                          { supply: new-tier-supply })
+                        (var-set total-supply new-total)
+                        (var-set next-token-id (+ token-id u1))
+                        (ok token-id))))))))))
+
+;; Transfer a Bitdap Pass NFT from the caller to a recipient.
+;; - Only the current owner may transfer.
+;; - Self-transfers (owner == recipient) are rejected as no-ops.
+(define-public (transfer (token-id uint) (recipient principal))
+  (let ((owner-row (map-get? token-owners { token-id: token-id })))
+    (match owner-row owner-data
+      (let ((owner (get owner owner-data)))
+        (if (not (is-eq owner tx-sender))
+            ERR-NOT-OWNER
+            (if (is-eq owner recipient)
+                ERR-SELF-TRANSFER
+                (begin
+                  (map-set token-owners
+                    { token-id: token-id }
+                    { owner: recipient })
+                  (ok true)))))
+      ERR-NOT-FOUND)))
+
+;; Burn (destroy) a Bitdap Pass NFT owned by the caller.
+;; - Only the current owner may burn.
+;; - Decrements total supply and the tier supply.
+(define-public (burn (token-id uint))
+  (let ((owner-row (map-get? token-owners { token-id: token-id })))
+    (match owner-row owner-data
+      (let ((owner (get owner owner-data)))
+        (if (not (is-eq owner tx-sender))
+            ERR-NOT-OWNER
+            (let ((meta-row (map-get? token-metadata { token-id: token-id })))
+              (match meta-row meta
+                (let
+                  (
+                    (tier (get tier meta))
+                    (tier-row (default-to { supply: u0 }
+                                          (map-get? tier-supplies { tier: tier })))
+                    (current-tier-supply (get supply tier-row))
+                  )
+                  (begin
+                    ;; Delete ownership and metadata.
+                    (map-delete token-owners { token-id: token-id })
+                    (map-delete token-metadata { token-id: token-id })
+                    ;; Decrement counters (clamped to zero by design choices).
+                    (map-set tier-supplies
+                      { tier: tier }
+                      { supply: (if (> current-tier-supply u0)
+                                    (- current-tier-supply u1)
+                                    u0) })
+                    (let ((current-total (var-get total-supply)))
+                      (var-set total-supply
+                        (if (> current-total u0)
+                            (- current-total u1)
+                            u0)))
+                    (ok true)))
+                ERR-NOT-FOUND))))
+      ERR-NOT-FOUND)))
 
 ;; read only functions
 ;; - Will expose views into ownership, metadata, and supply statistics.
 
 ;; private functions
-;; - Internal helpers for validating tiers and managing counters/maps will live here.
+;; - Internal helpers for validating tiers and managing counters/maps.
+
+;; Returns true if the given tier is one of the known tiers.
+(define-private (is-valid-tier (tier uint))
+  (or (is-eq tier TIER-BASIC)
+      (or (is-eq tier TIER-PRO)
+          (is-eq tier TIER-VIP))))
+
+;; Returns true if the given (tier, new-supply) would exceed that tier's max.
+(define-private (is-tier-over-max? (tier uint) (new-supply uint))
+  (if (is-eq tier TIER-BASIC)
+      (> new-supply MAX-BASIC-SUPPLY)
+      (if (is-eq tier TIER-PRO)
+          (> new-supply MAX-PRO-SUPPLY)
+          (if (is-eq tier TIER-VIP)
+              (> new-supply MAX-VIP-SUPPLY)
+              ;; Unknown tiers are treated as invalid via is-valid-tier, but
+              ;; this path is left as not over max for safety.
+              false))))
 
