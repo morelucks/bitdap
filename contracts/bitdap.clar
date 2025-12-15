@@ -70,5 +70,5 @@
 ;; - Will expose views into ownership, metadata, and supply statistics.
 
 ;; private functions
-;;
+;; - Internal helpers for validating tiers and managing counters/maps will live here.
 
