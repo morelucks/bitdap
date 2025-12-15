@@ -61,6 +61,9 @@
   { supply: uint })
 
 ;; public functions
+;; - Core NFT operations (mint, transfer, burn) will be added in later milestones.
+
+;; public functions
 ;;
 
 ;; read only functions
