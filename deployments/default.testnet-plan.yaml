@@ -1,0 +1,18 @@
+---
+id: 0
+name: Testnet deployment
+network: testnet
+stacks-node: "https://api.testnet.hiro.so"
+bitcoin-node: "http://blockstack:blockstacksystem@bitcoind.testnet.stacks.co:18332"
+plan:
+  batches:
+    - id: 0
+      transactions:
+        - contract-publish:
+            contract-name: bitdap
+            expected-sender: ST1EQNTKNRGME36P9EEXZCFFNCYBA50VN6SHNZ40
+            cost: 91350
+            path: contracts/bitdap.clar
+            anchor-block-only: true
+            clarity-version: 4
+      epoch: "3.3"
