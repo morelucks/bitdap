@@ -7,12 +7,15 @@
 ;;   (Basic, Pro, or VIP), which can be used by off-chain services or
 ;;   other contracts to gate features and experiences.
 ;;
-;;   Milestone 1 - Concept & Rules:
 ;;   - Collection name: Bitdap Pass
 ;;   - Tiers: Basic, Pro, VIP
 ;;   - 1 owner per token-id, non-fractional NFTs
 ;;   - Future milestones will define minting, transfer logic, and metadata
 ;;     for each tier.
+;;
+;;   - mint-event: emitted when a pass is minted (token-id, owner, tier)
+;;   - transfer-event: emitted when ownership changes (token-id, from, to)
+;;   - burn-event: emitted when a pass is burned (token-id, owner, tier)
 
 ;; traits
 ;; - Trait definitions can be added here (e.g., SIP-009) for interface compatibility.
@@ -128,6 +131,13 @@
                                     (map-set tier-supplies { tier: tier } { supply: new-tier-supply })
                                     (var-set total-supply new-total)
                                     (var-set next-token-id (+ token-id u1))
+                                    ;; Emit mint event.
+                                    (print (tuple
+                                        (event "mint-event")
+                                        (token-id token-id)
+                                        (owner recipient)
+                                        (tier tier)
+                                    ))
                                     (ok token-id)
                                 )
                             )
@@ -155,6 +165,13 @@
                         ERR-SELF-TRANSFER
                         (begin
                             (map-set token-owners { token-id: token-id } { owner: recipient })
+                            ;; Emit transfer event.
+                            (print (tuple
+                                (event "transfer-event")
+                                (token-id token-id)
+                                (from owner)
+                                (to recipient)
+                            ))
                             (ok true)
                         )
                     )
@@ -198,6 +215,13 @@
                                                 u0
                                             ))
                                     )
+                                    ;; Emit burn event.
+                                    (print (tuple
+                                        (event "burn-event")
+                                        (token-id token-id)
+                                        (owner owner)
+                                        (tier tier)
+                                    ))
                                     (ok true)
                                 )
                             )

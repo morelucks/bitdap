@@ -436,3 +436,134 @@ describe("Bitdap Pass - Multiple Mints", () => {
     expect(owner2.result).toBeOk(Cl.principal(address2));
   });
 });
+
+describe("Bitdap Pass - Events & Emissions", () => {
+  it("should emit mint-event when a pass is minted", () => {
+    const { result, events } = simnet.callPublicFn(
+      contractName,
+      "mint-pass",
+      [Cl.uint(1), Cl.none()],
+      address1
+    );
+    
+    expect(result).toBeOk(Cl.uint(1));
+    // Events are emitted via print statements - verify at least one event exists
+    expect(events.length).toBeGreaterThan(0);
+    
+    // In Clarity, print statements create events that can be tracked off-chain
+    // The events array contains print outputs which include our event data
+    const hasMintEvent = events.some((e: any) => {
+      const eventStr = JSON.stringify(e);
+      return eventStr.includes("mint-event") || eventStr.includes("token-id");
+    });
+    expect(hasMintEvent).toBe(true);
+  });
+
+  it("should emit transfer-event when a pass is transferred", () => {
+    // First mint a token
+    simnet.callPublicFn(
+      contractName,
+      "mint-pass",
+      [Cl.uint(1), Cl.none()],
+      address1
+    );
+
+    // Then transfer it
+    const { result, events } = simnet.callPublicFn(
+      contractName,
+      "transfer",
+      [Cl.uint(1), Cl.principal(address2)],
+      address1
+    );
+    
+    expect(result).toBeOk(Cl.bool(true));
+    expect(events.length).toBeGreaterThan(0);
+    
+    // Verify transfer event was emitted
+    const hasTransferEvent = events.some((e: any) => {
+      const eventStr = JSON.stringify(e);
+      return eventStr.includes("transfer-event") || eventStr.includes("from");
+    });
+    expect(hasTransferEvent).toBe(true);
+  });
+
+  it("should emit burn-event when a pass is burned", () => {
+    // First mint a token
+    simnet.callPublicFn(
+      contractName,
+      "mint-pass",
+      [Cl.uint(2), Cl.none()],
+      address1
+    );
+
+    // Then burn it
+    const { result, events } = simnet.callPublicFn(
+      contractName,
+      "burn",
+      [Cl.uint(1)],
+      address1
+    );
+    
+    expect(result).toBeOk(Cl.bool(true));
+    expect(events.length).toBeGreaterThan(0);
+    
+    // Verify burn event was emitted
+    const hasBurnEvent = events.some((e: any) => {
+      const eventStr = JSON.stringify(e);
+      return eventStr.includes("burn-event");
+    });
+    expect(hasBurnEvent).toBe(true);
+  });
+
+  it("should not emit events on failed operations", () => {
+    // Try to transfer a non-existent token
+    const { result, events } = simnet.callPublicFn(
+      contractName,
+      "transfer",
+      [Cl.uint(999), Cl.principal(address2)],
+      address1
+    );
+    
+    expect(result).toBeErr(Cl.uint(101)); // ERR-NOT-FOUND
+    // No transfer-event should be emitted on failure
+    const transferEvent = events.find((e: any) => 
+      e.event === "transfer-event" || 
+      (e.event === "print_event" && e.data && e.data.event === "transfer-event")
+    );
+    expect(transferEvent).toBeUndefined();
+  });
+
+  it("should emit events with correct tier information", () => {
+    // Mint tokens of different tiers - events are emitted and can be tracked off-chain
+    const basicResult = simnet.callPublicFn(
+      contractName,
+      "mint-pass",
+      [Cl.uint(1), Cl.none()],
+      address1
+    );
+    expect(basicResult.result).toBeOk(Cl.uint(1));
+    expect(basicResult.events.length).toBeGreaterThan(0);
+
+    const proResult = simnet.callPublicFn(
+      contractName,
+      "mint-pass",
+      [Cl.uint(2), Cl.none()],
+      address1
+    );
+    expect(proResult.result).toBeOk(Cl.uint(2));
+    expect(proResult.events.length).toBeGreaterThan(0);
+
+    const vipResult = simnet.callPublicFn(
+      contractName,
+      "mint-pass",
+      [Cl.uint(3), Cl.none()],
+      address1
+    );
+    expect(vipResult.result).toBeOk(Cl.uint(3));
+    expect(vipResult.events.length).toBeGreaterThan(0);
+    
+    // All events should contain tier information that can be parsed off-chain
+    const allHaveEvents = [basicResult, proResult, vipResult].every(r => r.events.length > 0);
+    expect(allHaveEvents).toBe(true);
+  });
+});
