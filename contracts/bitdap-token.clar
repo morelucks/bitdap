@@ -144,7 +144,7 @@
         ;; Validate inputs
         (asserts! (not (is-eq spender tx-sender)) ERR-INVALID-RECIPIENT)
         
-        ;; Set allowance
+        ;; Set allowance (amount is validated by being uint type)
         (set-allowance tx-sender spender amount)
         
         ;; Print approval event
@@ -209,13 +209,14 @@
         (let (
             (current-supply (var-get total-supply))
             (new-supply (+ current-supply amount))
+            (recipient-balance (get-balance-or-default recipient))
         )
             ;; Check max supply
             (asserts! (<= new-supply TOKEN-MAX-SUPPLY) ERR-MAX-SUPPLY-EXCEEDED)
             
             ;; Update total supply and recipient balance
             (var-set total-supply new-supply)
-            (set-balance recipient (+ (get-balance-or-default recipient) amount))
+            (set-balance recipient (+ recipient-balance amount))
             
             ;; Print mint event
             (print {
@@ -263,15 +264,17 @@
 (define-public (transfer-ownership (new-owner principal))
     (begin
         (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-UNAUTHORIZED)
-        (var-set contract-owner new-owner)
-        
-        (print {
-            action: "transfer-ownership",
-            old-owner: tx-sender,
-            new-owner: new-owner
-        })
-        
-        (ok true)
+        (let ((old-owner tx-sender))
+            (var-set contract-owner new-owner)
+            
+            (print {
+                action: "transfer-ownership",
+                old-owner: old-owner,
+                new-owner: new-owner
+            })
+            
+            (ok true)
+        )
     )
 )
 
