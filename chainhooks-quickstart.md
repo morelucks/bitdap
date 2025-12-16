@@ -41,6 +41,19 @@ Events originate from `print` statements in the Clarity contract. Example mint p
 }
 ```
 
+## Test your webhook with curl
+Send a sample payload to your webhook endpoint:
+```bash
+curl -X POST "$WEBHOOK_URL" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "event": "mint-event",
+    "token-id": 1,
+    "owner": "ST1SJ3DTE5DN7X54YDH5D64R3BCB6A2AG2ZQ8YPD5",
+    "tier": 2
+  }'
+```
+
 ## Files
 - `chainhooks.ts` — hook registration + payload parsing helpers
 - `chainhooks.example.ts` — sample webhook handler (Express-style)
