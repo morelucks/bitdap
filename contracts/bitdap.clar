@@ -35,6 +35,8 @@
 (define-constant ERR-SELF-TRANSFER (err u103))
 (define-constant ERR-MAX-SUPPLY (err u104))
 (define-constant ERR-MAX-TIER-SUPPLY (err u105))
+(define-constant ERR-UNAUTHORIZED (err u106))
+(define-constant ERR-PAUSED (err u107))
 
 ;; Tiers are represented as uints for compact on-chain storage.
 (define-constant TIER-BASIC u1)
@@ -56,6 +58,12 @@
 
 ;; Total number of Bitdap Pass NFTs currently in circulation.
 (define-data-var total-supply uint u0)
+
+;; Contract owner (admin)
+(define-data-var contract-owner principal 'SP1EQNTKNRGME36P9EEXZCFFNCYBA50VN51676JB)
+
+;; Pause flag (when true, mint/transfer are disabled)
+(define-data-var paused bool false)
 
 ;; data maps
 ;; - Storage for token ownership, metadata, and per-tier supply.
@@ -93,11 +101,16 @@
     MAX-SUPPLY
 )
 
+(define-read-only (is-paused)
+    (ok (var-get paused))
+)
+
 (define-public (mint-pass
         (tier uint)
         (uri (optional (string-utf8 256)))
     )
     (begin
+        (asserts! (not (var-get paused)) ERR-PAUSED)
         ;; Validate tier first.
         (if (not (is-valid-tier tier))
             ERR-INVALID-TIER
@@ -161,7 +174,8 @@
             owner-data (let ((owner (get owner owner-data)))
                 (if (not (is-eq owner tx-sender))
                     ERR-NOT-OWNER
-                    (if (is-eq owner recipient)
+                    (if (or (var-get paused) (is-eq owner recipient))
+                        (if (var-get paused) ERR-PAUSED ERR-SELF-TRANSFER)
                         ERR-SELF-TRANSFER
                         (begin
                             (map-set token-owners { token-id: token-id } { owner: recipient })
@@ -323,6 +337,46 @@
                 ;; this path is left as not over max for safety.
                 false
             )
+        )
+    )
+)
+
+;; Admin helpers
+(define-private (assert-admin)
+    (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-UNAUTHORIZED)
+)
+
+;; Admin: pause minting/transfers
+(define-public (pause)
+    (begin
+        (assert-admin)
+        (var-set paused true)
+        (ok true)
+    )
+)
+
+;; Admin: unpause minting/transfers
+(define-public (unpause)
+    (begin
+        (assert-admin)
+        (var-set paused false)
+        (ok true)
+    )
+)
+
+;; Admin: update token URI (metadata)
+(define-public (set-token-uri (token-id uint) (uri (optional (string-utf8 256))))
+    (begin
+        (assert-admin)
+        (match (map-get? token-metadata { token-id: token-id })
+            meta (begin
+                (map-set token-metadata { token-id: token-id } {
+                    tier: (get tier meta),
+                    uri: uri
+                })
+                (ok true)
+            )
+            ERR-NOT-FOUND
         )
     )
 )
