@@ -59,8 +59,8 @@
 ;; Total number of Bitdap Pass NFTs currently in circulation.
 (define-data-var total-supply uint u0)
 
-;; Contract owner (admin)
-(define-data-var contract-owner principal 'SP1EQNTKNRGME36P9EEXZCFFNCYBA50VN51676JB)
+;; Contract owner (admin) - initialized to contract deployer
+(define-data-var contract-owner principal tx-sender)
 
 ;; Pause flag (when true, mint/transfer are disabled)
 (define-data-var paused bool false)

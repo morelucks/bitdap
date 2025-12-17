@@ -443,11 +443,11 @@ describe("Bitdap Pass - Admin Controls", () => {
 
   it("should pause and block mint/transfer, then unpause", () => {
     // Pause
-    const pauseRes = simnet.callPublicFn(contractName, "pause", [], deployer);
+    const { result: pauseRes } = simnet.callPublicFn(contractName, "pause", [], deployer);
     expect(pauseRes).toBeOk(Cl.bool(true));
 
     // Mint should fail with ERR-PAUSED (u107)
-    const mintRes = simnet.callPublicFn(
+    const { result: mintRes } = simnet.callPublicFn(
       contractName,
       "mint-pass",
       [Cl.uint(1), Cl.none()],
@@ -466,7 +466,7 @@ describe("Bitdap Pass - Admin Controls", () => {
     simnet.callPublicFn(contractName, "pause", [], deployer);
 
     // Transfer should fail with ERR-PAUSED (u107)
-    const transferRes = simnet.callPublicFn(
+    const { result: transferRes } = simnet.callPublicFn(
       contractName,
       "transfer",
       [Cl.uint(1), Cl.principal(user)],
@@ -475,7 +475,7 @@ describe("Bitdap Pass - Admin Controls", () => {
     expect(transferRes).toBeErr(Cl.uint(107));
 
     // Unpause and transfer should succeed
-    const unpauseRes = simnet.callPublicFn(
+    const { result: unpauseRes } = simnet.callPublicFn(
       contractName,
       "unpause",
       [],
@@ -483,7 +483,7 @@ describe("Bitdap Pass - Admin Controls", () => {
     );
     expect(unpauseRes).toBeOk(Cl.bool(true));
 
-    const transferOk = simnet.callPublicFn(
+    const { result: transferOk } = simnet.callPublicFn(
       contractName,
       "transfer",
       [Cl.uint(1), Cl.principal(user)],
@@ -494,7 +494,7 @@ describe("Bitdap Pass - Admin Controls", () => {
 
   it("should allow admin to set token URI and reject non-admin", () => {
     // Mint a token as deployer
-    const mintRes = simnet.callPublicFn(
+    const { result: mintRes } = simnet.callPublicFn(
       contractName,
       "mint-pass",
       [Cl.uint(2), Cl.none()],
@@ -504,7 +504,7 @@ describe("Bitdap Pass - Admin Controls", () => {
 
     // Set URI as admin
     const newUri = Cl.some(Cl.stringUtf8("https://example.com/bitdap/1.json"));
-    const setUriRes = simnet.callPublicFn(
+    const { result: setUriRes } = simnet.callPublicFn(
       contractName,
       "set-token-uri",
       [Cl.uint(1), newUri],
@@ -522,7 +522,7 @@ describe("Bitdap Pass - Admin Controls", () => {
     expect(uriRes.result).toBeOk(newUri);
 
     // Non-admin attempt should fail with ERR-UNAUTHORIZED (u106)
-    const setUriNonAdmin = simnet.callPublicFn(
+    const { result: setUriNonAdmin } = simnet.callPublicFn(
       contractName,
       "set-token-uri",
       [Cl.uint(1), Cl.some(Cl.stringUtf8("https://not-allowed"))],
