@@ -1,196 +1,239 @@
-import { Clarinet, Tx, Chain, Account, types } from 'https://deno.land/x/clarinet@v1.0.0/index.ts';
-import { assertEquals } from 'https://deno.land/std@0.90.0/testing/asserts.ts';
+import { describe, expect, it } from "vitest";
+import { Cl } from "@stacks/transactions";
 
-Clarinet.test({
-    name: "Token has correct initial state",
-    async fn(chain: Chain, accounts: Map<string, Account>) {
-        const deployer = accounts.get('deployer')!;
-        
-        // Check token metadata
-        let block = chain.mineBlock([
-            Tx.contractCall('bitdap-token', 'get-name', [], deployer.address),
-            Tx.contractCall('bitdap-token', 'get-symbol', [], deployer.address),
-            Tx.contractCall('bitdap-token', 'get-decimals', [], deployer.address),
-            Tx.contractCall('bitdap-token', 'get-total-supply', [], deployer.address),
-            Tx.contractCall('bitdap-token', 'get-balance', [types.principal(deployer.address)], deployer.address),
-        ]);
-        
-        assertEquals(block.receipts.length, 5);
-        block.receipts[0].result.expectOk().expectAscii("Bitdap Token");
-        block.receipts[1].result.expectOk().expectAscii("BITDAP");
-        block.receipts[2].result.expectOk().expectUint(6);
-        block.receipts[3].result.expectOk().expectUint(1000000000);
-        block.receipts[4].result.expectOk().expectUint(1000000000);
-    },
-});
+const accounts = simnet.getAccounts();
+const deployer = accounts.get("deployer")!;
 
-Clarinet.test({
-    name: "Can transfer tokens successfully",
-    async fn(chain: Chain, accounts: Map<string, Account>) {
-        const deployer = accounts.get('deployer')!;
-        const wallet1 = accounts.get('wallet_1')!;
-        const transferAmount = 100000000; // 100 tokens
-        
-        let block = chain.mineBlock([
-            Tx.contractCall('bitdap-token', 'transfer', [
-                types.uint(transferAmount),
-                types.principal(deployer.address),
-                types.principal(wallet1.address),
-                types.none()
-            ], deployer.address),
-        ]);
-        
-        assertEquals(block.receipts.length, 1);
-        block.receipts[0].result.expectOk().expectBool(true);
-        
-        // Check balances after transfer
-        let balanceBlock = chain.mineBlock([
-            Tx.contractCall('bitdap-token', 'get-balance', [types.principal(deployer.address)], deployer.address),
-            Tx.contractCall('bitdap-token', 'get-balance', [types.principal(wallet1.address)], deployer.address),
-        ]);
-        
-        balanceBlock.receipts[0].result.expectOk().expectUint(1000000000 - transferAmount);
-        balanceBlock.receipts[1].result.expectOk().expectUint(transferAmount);
-    },
-});
+const contractName = "bitdap-token";
 
-Clarinet.test({
-    name: "Cannot transfer more than balance",
-    async fn(chain: Chain, accounts: Map<string, Account>) {
-        const deployer = accounts.get('deployer')!;
-        const wallet1 = accounts.get('wallet_1')!;
-        const transferAmount = 2000000000; // More than total supply
-        
-        let block = chain.mineBlock([
-            Tx.contractCall('bitdap-token', 'transfer', [
-                types.uint(transferAmount),
-                types.principal(deployer.address),
-                types.principal(wallet1.address),
-                types.none()
-            ], deployer.address),
-        ]);
-        
-        assertEquals(block.receipts.length, 1);
-        block.receipts[0].result.expectErr().expectUint(402); // ERR-INSUFFICIENT-BALANCE
-    },
-});
+describe("Bitdap Token - Basic Functionality", () => {
+  it("should have correct token metadata", () => {
+    const nameResult = simnet.callReadOnlyFn(
+      contractName,
+      "get-name",
+      [],
+      deployer
+    );
+    expect(nameResult.result).toBeOk(Cl.stringAscii("Bitdap Token"));
 
-Clarinet.test({
-    name: "Approval and transfer-from works correctly",
-    async fn(chain: Chain, accounts: Map<string, Account>) {
-        const deployer = accounts.get('deployer')!;
-        const wallet1 = accounts.get('wallet_1')!;
-        const wallet2 = accounts.get('wallet_2')!;
-        const approveAmount = 200000000; // 200 tokens
-        const transferAmount = 100000000; // 100 tokens
-        
-        // Approve wallet1 to spend tokens
-        let approveBlock = chain.mineBlock([
-            Tx.contractCall('bitdap-token', 'approve', [
-                types.principal(wallet1.address),
-                types.uint(approveAmount)
-            ], deployer.address),
-        ]);
-        
-        approveBlock.receipts[0].result.expectOk().expectBool(true);
-        
-        // Check allowance
-        let allowanceBlock = chain.mineBlock([
-            Tx.contractCall('bitdap-token', 'get-allowance', [
-                types.principal(deployer.address),
-                types.principal(wallet1.address)
-            ], deployer.address),
-        ]);
-        
-        allowanceBlock.receipts[0].result.expectOk().expectUint(approveAmount);
-        
-        // Transfer from deployer to wallet2 using wallet1's allowance
-        let transferBlock = chain.mineBlock([
-            Tx.contractCall('bitdap-token', 'transfer-from', [
-                types.principal(deployer.address),
-                types.principal(wallet2.address),
-                types.uint(transferAmount),
-                types.none()
-            ], wallet1.address),
-        ]);
-        
-        transferBlock.receipts[0].result.expectOk().expectBool(true);
-        
-        // Check final balances and allowance
-        let finalBlock = chain.mineBlock([
-            Tx.contractCall('bitdap-token', 'get-balance', [types.principal(deployer.address)], deployer.address),
-            Tx.contractCall('bitdap-token', 'get-balance', [types.principal(wallet2.address)], deployer.address),
-            Tx.contractCall('bitdap-token', 'get-allowance', [
-                types.principal(deployer.address),
-                types.principal(wallet1.address)
-            ], deployer.address),
-        ]);
-        
-        finalBlock.receipts[0].result.expectOk().expectUint(1000000000 - transferAmount);
-        finalBlock.receipts[1].result.expectOk().expectUint(transferAmount);
-        finalBlock.receipts[2].result.expectOk().expectUint(approveAmount - transferAmount);
-    },
-});
+    const symbolResult = simnet.callReadOnlyFn(
+      contractName,
+      "get-symbol",
+      [],
+      deployer
+    );
+    expect(symbolResult.result).toBeOk(Cl.stringAscii("BITDAP"));
 
-Clarinet.test({
-    name: "Only owner can mint tokens",
-    async fn(chain: Chain, accounts: Map<string, Account>) {
-        const deployer = accounts.get('deployer')!;
-        const wallet1 = accounts.get('wallet_1')!;
-        const mintAmount = 50000000; // 50 tokens
-        
-        // Deployer can mint
-        let mintBlock = chain.mineBlock([
-            Tx.contractCall('bitdap-token', 'mint', [
-                types.principal(wallet1.address),
-                types.uint(mintAmount)
-            ], deployer.address),
-        ]);
-        
-        mintBlock.receipts[0].result.expectOk().expectBool(true);
-        
-        // Non-owner cannot mint
-        let failMintBlock = chain.mineBlock([
-            Tx.contractCall('bitdap-token', 'mint', [
-                types.principal(wallet1.address),
-                types.uint(mintAmount)
-            ], wallet1.address),
-        ]);
-        
-        failMintBlock.receipts[0].result.expectErr().expectUint(401); // ERR-UNAUTHORIZED
-        
-        // Check balance and total supply
-        let checkBlock = chain.mineBlock([
-            Tx.contractCall('bitdap-token', 'get-balance', [types.principal(wallet1.address)], deployer.address),
-            Tx.contractCall('bitdap-token', 'get-total-supply', [], deployer.address),
-        ]);
-        
-        checkBlock.receipts[0].result.expectOk().expectUint(mintAmount);
-        checkBlock.receipts[1].result.expectOk().expectUint(1000000000 + mintAmount);
-    },
-});
+    const decimalsResult = simnet.callReadOnlyFn(
+      contractName,
+      "get-decimals",
+      [],
+      deployer
+    );
+    expect(decimalsResult.result).toBeOk(Cl.uint(6));
 
-Clarinet.test({
-    name: "Can burn tokens",
-    async fn(chain: Chain, accounts: Map<string, Account>) {
-        const deployer = accounts.get('deployer')!;
-        const burnAmount = 100000000; // 100 tokens
-        
-        let burnBlock = chain.mineBlock([
-            Tx.contractCall('bitdap-token', 'burn', [
-                types.uint(burnAmount)
-            ], deployer.address),
-        ]);
-        
-        burnBlock.receipts[0].result.expectOk().expectBool(true);
-        
-        // Check balance and total supply after burn
-        let checkBlock = chain.mineBlock([
-            Tx.contractCall('bitdap-token', 'get-balance', [types.principal(deployer.address)], deployer.address),
-            Tx.contractCall('bitdap-token', 'get-total-supply', [], deployer.address),
-        ]);
-        
-        checkBlock.receipts[0].result.expectOk().expectUint(1000000000 - burnAmount);
-        checkBlock.receipts[1].result.expectOk().expectUint(1000000000 - burnAmount);
-    },
+    const supplyResult = simnet.callReadOnlyFn(
+      contractName,
+      "get-total-supply",
+      [],
+      deployer
+    );
+    expect(supplyResult.result).toBeOk(Cl.uint(1000000000));
+
+    const balanceResult = simnet.callReadOnlyFn(
+      contractName,
+      "get-balance",
+      [Cl.principal(deployer)],
+      deployer
+    );
+    expect(balanceResult.result).toBeOk(Cl.uint(1000000000));
+  });
+
+  it("should transfer tokens successfully", () => {
+    const wallet1 = accounts.get("wallet_1")!;
+    const transferAmount = 100000000; // 100 tokens
+
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "transfer",
+      [
+        Cl.uint(transferAmount),
+        Cl.principal(deployer),
+        Cl.principal(wallet1),
+        Cl.none(),
+      ],
+      deployer
+    );
+    expect(result).toBeOk(Cl.bool(true));
+
+    // Check balances after transfer
+    const deployerBalance = simnet.callReadOnlyFn(
+      contractName,
+      "get-balance",
+      [Cl.principal(deployer)],
+      deployer
+    );
+    expect(deployerBalance.result).toBeOk(Cl.uint(1000000000 - transferAmount));
+
+    const wallet1Balance = simnet.callReadOnlyFn(
+      contractName,
+      "get-balance",
+      [Cl.principal(wallet1)],
+      deployer
+    );
+    expect(wallet1Balance.result).toBeOk(Cl.uint(transferAmount));
+  });
+
+  it("should reject transfer exceeding balance", () => {
+    const wallet1 = accounts.get("wallet_1")!;
+    const transferAmount = 2000000000; // More than total supply
+
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "transfer",
+      [
+        Cl.uint(transferAmount),
+        Cl.principal(deployer),
+        Cl.principal(wallet1),
+        Cl.none(),
+      ],
+      deployer
+    );
+    expect(result).toBeErr(Cl.uint(402)); // ERR-INSUFFICIENT-BALANCE
+  });
+
+  it("should handle approval and transfer-from correctly", () => {
+    const wallet1 = accounts.get("wallet_1")!;
+    const wallet2 = accounts.get("wallet_2")!;
+    const approveAmount = 200000000; // 200 tokens
+    const transferAmount = 100000000; // 100 tokens
+
+    // Approve wallet1 to spend tokens
+    const { result: approveRes } = simnet.callPublicFn(
+      contractName,
+      "approve",
+      [Cl.principal(wallet1), Cl.uint(approveAmount)],
+      deployer
+    );
+    expect(approveRes).toBeOk(Cl.bool(true));
+
+    // Check allowance
+    const allowanceRes = simnet.callReadOnlyFn(
+      contractName,
+      "get-allowance",
+      [Cl.principal(deployer), Cl.principal(wallet1)],
+      deployer
+    );
+    expect(allowanceRes.result).toBeOk(Cl.uint(approveAmount));
+
+    // Transfer from deployer to wallet2 using wallet1's allowance
+    const { result: transferRes } = simnet.callPublicFn(
+      contractName,
+      "transfer-from",
+      [
+        Cl.principal(deployer),
+        Cl.principal(wallet2),
+        Cl.uint(transferAmount),
+        Cl.none(),
+      ],
+      wallet1
+    );
+    expect(transferRes).toBeOk(Cl.bool(true));
+
+    // Check final balances and allowance
+    const finalDeployerBalance = simnet.callReadOnlyFn(
+      contractName,
+      "get-balance",
+      [Cl.principal(deployer)],
+      deployer
+    );
+    expect(finalDeployerBalance.result).toBeOk(
+      Cl.uint(1000000000 - transferAmount)
+    );
+
+    const finalWallet2Balance = simnet.callReadOnlyFn(
+      contractName,
+      "get-balance",
+      [Cl.principal(wallet2)],
+      deployer
+    );
+    expect(finalWallet2Balance.result).toBeOk(Cl.uint(transferAmount));
+
+    const finalAllowance = simnet.callReadOnlyFn(
+      contractName,
+      "get-allowance",
+      [Cl.principal(deployer), Cl.principal(wallet1)],
+      deployer
+    );
+    expect(finalAllowance.result).toBeOk(Cl.uint(approveAmount - transferAmount));
+  });
+
+  it("should only allow owner to mint tokens", () => {
+    const wallet1 = accounts.get("wallet_1")!;
+    const mintAmount = 50000000; // 50 tokens
+
+    // Deployer can mint
+    const { result: mintRes } = simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(wallet1), Cl.uint(mintAmount)],
+      deployer
+    );
+    expect(mintRes).toBeOk(Cl.bool(true));
+
+    // Non-owner cannot mint
+    const { result: failMintRes } = simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(wallet1), Cl.uint(mintAmount)],
+      wallet1
+    );
+    expect(failMintRes).toBeErr(Cl.uint(401)); // ERR-UNAUTHORIZED
+
+    // Check balance and total supply
+    const wallet1Balance = simnet.callReadOnlyFn(
+      contractName,
+      "get-balance",
+      [Cl.principal(wallet1)],
+      deployer
+    );
+    expect(wallet1Balance.result).toBeOk(Cl.uint(mintAmount));
+
+    const totalSupply = simnet.callReadOnlyFn(
+      contractName,
+      "get-total-supply",
+      [],
+      deployer
+    );
+    expect(totalSupply.result).toBeOk(Cl.uint(1000000000 + mintAmount));
+  });
+
+  it("should allow burning tokens", () => {
+    const burnAmount = 100000000; // 100 tokens
+
+    const { result: burnRes } = simnet.callPublicFn(
+      contractName,
+      "burn",
+      [Cl.uint(burnAmount)],
+      deployer
+    );
+    expect(burnRes).toBeOk(Cl.bool(true));
+
+    // Check balance and total supply after burn
+    const deployerBalance = simnet.callReadOnlyFn(
+      contractName,
+      "get-balance",
+      [Cl.principal(deployer)],
+      deployer
+    );
+    expect(deployerBalance.result).toBeOk(Cl.uint(1000000000 - burnAmount));
+
+    const totalSupply = simnet.callReadOnlyFn(
+      contractName,
+      "get-total-supply",
+      [],
+      deployer
+    );
+    expect(totalSupply.result).toBeOk(Cl.uint(1000000000 - burnAmount));
+  });
 });

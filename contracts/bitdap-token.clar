@@ -25,10 +25,13 @@
 (define-constant ERR-SELF-TRANSFER (err u405))
 (define-constant ERR-MAX-SUPPLY-EXCEEDED (err u406))
 (define-constant ERR-INVALID-RECIPIENT (err u407))
+(define-constant ERR-CONTRACT-PAUSED (err u408))
 
 ;; Data variables
 (define-data-var total-supply uint u0)
 (define-data-var contract-owner principal CONTRACT-OWNER)
+(define-data-var token-paused bool false)
+(define-data-var token-uri (optional (string-utf8 256)) none)
 
 ;; Data maps
 ;; Principal -> balance
@@ -42,6 +45,11 @@
 ;; Check if amount is valid (greater than 0)
 (define-private (is-valid-amount (amount uint))
     (> amount u0)
+)
+
+;; Check if contract is not paused
+(define-private (is-not-paused)
+    (not (var-get token-paused))
 )
 
 ;; Get balance for a principal (returns 0 if not found)
@@ -77,6 +85,8 @@
 ;; Transfer tokens from sender to recipient
 (define-public (transfer (amount uint) (sender principal) (recipient principal) (memo (optional (buff 34))))
     (begin
+        ;; Check if contract is not paused
+        (asserts! (is-not-paused) ERR-CONTRACT-PAUSED)
         ;; Validate inputs
         (asserts! (is-valid-amount amount) ERR-INVALID-AMOUNT)
         (asserts! (not (is-eq sender recipient)) ERR-SELF-TRANSFER)
@@ -131,9 +141,9 @@
     (ok (var-get total-supply))
 )
 
-;; Get token URI (not implemented for fungible tokens)
+;; Get token URI
 (define-read-only (get-token-uri)
-    (ok none)
+    (ok (var-get token-uri))
 )
 
 ;; Additional ERC20-like functions
@@ -141,6 +151,8 @@
 ;; Approve spender to spend tokens on behalf of owner
 (define-public (approve (spender principal) (amount uint))
     (begin
+        ;; Check if contract is not paused
+        (asserts! (is-not-paused) ERR-CONTRACT-PAUSED)
         ;; Validate inputs
         (asserts! (not (is-eq spender tx-sender)) ERR-INVALID-RECIPIENT)
         
@@ -167,6 +179,8 @@
 ;; Transfer tokens from owner to recipient using allowance
 (define-public (transfer-from (owner principal) (recipient principal) (amount uint) (memo (optional (buff 34))))
     (begin
+        ;; Check if contract is not paused
+        (asserts! (is-not-paused) ERR-CONTRACT-PAUSED)
         ;; Validate inputs
         (asserts! (is-valid-amount amount) ERR-INVALID-AMOUNT)
         (asserts! (not (is-eq owner recipient)) ERR-SELF-TRANSFER)
@@ -202,6 +216,8 @@
 ;; Mint new tokens (only contract owner)
 (define-public (mint (recipient principal) (amount uint))
     (begin
+        ;; Check if contract is not paused
+        (asserts! (is-not-paused) ERR-CONTRACT-PAUSED)
         ;; Only contract owner can mint
         (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-UNAUTHORIZED)
         (asserts! (is-valid-amount amount) ERR-INVALID-AMOUNT)
@@ -234,6 +250,8 @@
 ;; Burn tokens from sender's balance
 (define-public (burn (amount uint))
     (begin
+        ;; Check if contract is not paused
+        (asserts! (is-not-paused) ERR-CONTRACT-PAUSED)
         (asserts! (is-valid-amount amount) ERR-INVALID-AMOUNT)
         
         (let (
@@ -281,6 +299,62 @@
 ;; Get contract owner
 (define-read-only (get-contract-owner)
     (ok (var-get contract-owner))
+)
+
+;; Pause contract (only owner)
+(define-public (pause)
+    (begin
+        (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-UNAUTHORIZED)
+        (var-set token-paused true)
+        
+        (print {
+            action: "pause",
+            caller: tx-sender
+        })
+        
+        (ok true)
+    )
+)
+
+;; Unpause contract (only owner)
+(define-public (unpause)
+    (begin
+        (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-UNAUTHORIZED)
+        (var-set token-paused false)
+        
+        (print {
+            action: "unpause",
+            caller: tx-sender
+        })
+        
+        (ok true)
+    )
+)
+
+;; Set token URI (only owner)
+(define-public (set-token-uri (new-uri (optional (string-utf8 256))))
+    (begin
+        (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-UNAUTHORIZED)
+        (var-set token-uri new-uri)
+        
+        (print {
+            action: "set-token-uri",
+            caller: tx-sender,
+            new-uri: new-uri
+        })
+        
+        (ok true)
+    )
+)
+
+;; Get pause state
+(define-read-only (is-paused)
+    (ok (var-get token-paused))
+)
+
+;; Get current token URI
+(define-read-only (get-current-uri)
+    (ok (var-get token-uri))
 )
 
 ;; Initialize contract with initial supply to deployer
