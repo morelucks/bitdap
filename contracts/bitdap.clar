@@ -59,11 +59,14 @@
 ;; Total number of Bitdap Pass NFTs currently in circulation.
 (define-data-var total-supply uint u0)
 
-;; Contract owner (admin)
-(define-data-var contract-owner principal 'SP1EQNTKNRGME36P9EEXZCFFNCYBA50VN51676JB)
+;; Contract owner (admin) - initialized to contract deployer
+(define-data-var contract-owner principal tx-sender)
 
 ;; Pause flag (when true, mint/transfer are disabled)
 (define-data-var paused bool false)
+
+;; Marketplace pause flag (when true, marketplace operations are disabled)
+(define-data-var marketplace-paused bool false)
 
 ;; data maps
 ;; - Storage for token ownership, metadata, and per-tier supply.
@@ -111,6 +114,7 @@
     )
     (begin
         (asserts! (not (var-get paused)) ERR-PAUSED)
+        (asserts! (not (var-get marketplace-paused)) ERR-PAUSED)
         ;; Validate tier first.
         (if (not (is-valid-tier tier))
             ERR-INVALID-TIER
@@ -174,19 +178,21 @@
             owner-data (let ((owner (get owner owner-data)))
                 (if (not (is-eq owner tx-sender))
                     ERR-NOT-OWNER
-                    (if (or (var-get paused) (is-eq owner recipient))
-                        (if (var-get paused) ERR-PAUSED ERR-SELF-TRANSFER)
-                        ERR-SELF-TRANSFER
-                        (begin
-                            (map-set token-owners { token-id: token-id } { owner: recipient })
-                            ;; Emit transfer event.
-                            (print (tuple
-                                (event "transfer-event")
-                                (token-id token-id)
-                                (from owner)
-                                (to recipient)
-                            ))
-                            (ok true)
+                    (if (var-get paused)
+                        ERR-PAUSED
+                        (if (is-eq owner recipient)
+                            ERR-SELF-TRANSFER
+                            (begin
+                                (map-set token-owners { token-id: token-id } { owner: recipient })
+                                ;; Emit transfer event.
+                                (print (tuple
+                                    (event "transfer-event")
+                                    (token-id token-id)
+                                    (from owner)
+                                    (to recipient)
+                                ))
+                                (ok true)
+                            )
                         )
                     )
                 )
@@ -341,15 +347,10 @@
     )
 )
 
-;; Admin helpers
-(define-private (assert-admin)
-    (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-UNAUTHORIZED)
-)
-
 ;; Admin: pause minting/transfers
 (define-public (pause)
     (begin
-        (assert-admin)
+        (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-UNAUTHORIZED)
         (var-set paused true)
         (ok true)
     )
@@ -358,7 +359,7 @@
 ;; Admin: unpause minting/transfers
 (define-public (unpause)
     (begin
-        (assert-admin)
+        (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-UNAUTHORIZED)
         (var-set paused false)
         (ok true)
     )
@@ -367,7 +368,7 @@
 ;; Admin: update token URI (metadata)
 (define-public (set-token-uri (token-id uint) (uri (optional (string-utf8 256))))
     (begin
-        (assert-admin)
+        (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-UNAUTHORIZED)
         (match (map-get? token-metadata { token-id: token-id })
             meta (begin
                 (map-set token-metadata { token-id: token-id } {
@@ -379,4 +380,62 @@
             ERR-NOT-FOUND
         )
     )
+)
+
+;; Admin: set a new admin (transfer admin rights)
+(define-public (set-admin (new-admin principal))
+    (begin
+        (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-UNAUTHORIZED)
+        (var-set contract-owner new-admin)
+        ;; Emit admin change event
+        (print (tuple
+            (event "admin-changed")
+            (old-admin tx-sender)
+            (new-admin new-admin)
+        ))
+        (ok true)
+    )
+)
+
+;; Admin: transfer admin rights (alias for set-admin)
+(define-public (transfer-admin (new-admin principal))
+    (set-admin new-admin)
+)
+
+;; Admin: pause marketplace (blocks create/purchase operations)
+(define-public (pause-marketplace)
+    (begin
+        (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-UNAUTHORIZED)
+        (var-set marketplace-paused true)
+        ;; Emit marketplace pause event
+        (print (tuple
+            (event "marketplace-paused")
+            (admin tx-sender)
+        ))
+        (ok true)
+    )
+)
+
+;; Admin: unpause marketplace
+(define-public (unpause-marketplace)
+    (begin
+        (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-UNAUTHORIZED)
+        (var-set marketplace-paused false)
+        ;; Emit marketplace unpause event
+        (print (tuple
+            (event "marketplace-unpaused")
+            (admin tx-sender)
+        ))
+        (ok true)
+    )
+)
+
+;; Read-only: check if marketplace is paused
+(define-read-only (is-marketplace-paused)
+    (ok (var-get marketplace-paused))
+)
+
+;; Read-only: get current admin
+(define-read-only (get-admin)
+    (ok (var-get contract-owner))
 )
