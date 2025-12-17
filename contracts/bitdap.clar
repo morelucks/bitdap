@@ -347,15 +347,10 @@
     )
 )
 
-;; Admin helpers
-(define-private (assert-admin)
-    (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-UNAUTHORIZED)
-)
-
 ;; Admin: pause minting/transfers
 (define-public (pause)
     (begin
-        (assert-admin)
+        (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-UNAUTHORIZED)
         (var-set paused true)
         (ok true)
     )
@@ -364,7 +359,7 @@
 ;; Admin: unpause minting/transfers
 (define-public (unpause)
     (begin
-        (assert-admin)
+        (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-UNAUTHORIZED)
         (var-set paused false)
         (ok true)
     )
@@ -373,7 +368,7 @@
 ;; Admin: update token URI (metadata)
 (define-public (set-token-uri (token-id uint) (uri (optional (string-utf8 256))))
     (begin
-        (assert-admin)
+        (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-UNAUTHORIZED)
         (match (map-get? token-metadata { token-id: token-id })
             meta (begin
                 (map-set token-metadata { token-id: token-id } {
@@ -390,7 +385,7 @@
 ;; Admin: set a new admin (transfer admin rights)
 (define-public (set-admin (new-admin principal))
     (begin
-        (assert-admin)
+        (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-UNAUTHORIZED)
         (var-set contract-owner new-admin)
         ;; Emit admin change event
         (print (tuple
@@ -410,7 +405,7 @@
 ;; Admin: pause marketplace (blocks create/purchase operations)
 (define-public (pause-marketplace)
     (begin
-        (assert-admin)
+        (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-UNAUTHORIZED)
         (var-set marketplace-paused true)
         ;; Emit marketplace pause event
         (print (tuple
@@ -424,7 +419,7 @@
 ;; Admin: unpause marketplace
 (define-public (unpause-marketplace)
     (begin
-        (assert-admin)
+        (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-UNAUTHORIZED)
         (var-set marketplace-paused false)
         ;; Emit marketplace unpause event
         (print (tuple
