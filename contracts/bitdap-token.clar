@@ -151,6 +151,8 @@
 ;; Approve spender to spend tokens on behalf of owner
 (define-public (approve (spender principal) (amount uint))
     (begin
+        ;; Check if contract is not paused
+        (asserts! (is-not-paused) ERR-CONTRACT-PAUSED)
         ;; Validate inputs
         (asserts! (not (is-eq spender tx-sender)) ERR-INVALID-RECIPIENT)
         
