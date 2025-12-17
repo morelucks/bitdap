@@ -25,10 +25,13 @@
 (define-constant ERR-SELF-TRANSFER (err u405))
 (define-constant ERR-MAX-SUPPLY-EXCEEDED (err u406))
 (define-constant ERR-INVALID-RECIPIENT (err u407))
+(define-constant ERR-CONTRACT-PAUSED (err u408))
 
 ;; Data variables
 (define-data-var total-supply uint u0)
 (define-data-var contract-owner principal CONTRACT-OWNER)
+(define-data-var token-paused bool false)
+(define-data-var token-uri (optional (string-utf8 256)) none)
 
 ;; Data maps
 ;; Principal -> balance
