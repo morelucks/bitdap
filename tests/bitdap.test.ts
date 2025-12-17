@@ -438,12 +438,12 @@ describe("Bitdap Pass - Multiple Mints", () => {
 });
 
 describe("Bitdap Pass - Admin Controls", () => {
-  const deployer = address1;
+  const admin = deployer;
   const user = address2;
 
   it("should pause and block mint/transfer, then unpause", () => {
     // Pause
-    const { result: pauseRes } = simnet.callPublicFn(contractName, "pause", [], deployer);
+    const { result: pauseRes } = simnet.callPublicFn(contractName, "pause", [], admin);
     expect(pauseRes).toBeOk(Cl.bool(true));
 
     // Mint should fail with ERR-PAUSED (u107)
@@ -451,26 +451,26 @@ describe("Bitdap Pass - Admin Controls", () => {
       contractName,
       "mint-pass",
       [Cl.uint(1), Cl.none()],
-      deployer
+      admin
     );
     expect(mintRes).toBeErr(Cl.uint(107));
 
     // Prepare a minted token before transfer test: unpause -> mint -> pause
-    simnet.callPublicFn(contractName, "unpause", [], deployer);
+    simnet.callPublicFn(contractName, "unpause", [], admin);
     simnet.callPublicFn(
       contractName,
       "mint-pass",
       [Cl.uint(1), Cl.none()],
-      deployer
+      admin
     );
-    simnet.callPublicFn(contractName, "pause", [], deployer);
+    simnet.callPublicFn(contractName, "pause", [], admin);
 
     // Transfer should fail with ERR-PAUSED (u107)
     const { result: transferRes } = simnet.callPublicFn(
       contractName,
       "transfer",
       [Cl.uint(1), Cl.principal(user)],
-      deployer
+      admin
     );
     expect(transferRes).toBeErr(Cl.uint(107));
 
@@ -479,7 +479,7 @@ describe("Bitdap Pass - Admin Controls", () => {
       contractName,
       "unpause",
       [],
-      deployer
+      admin
     );
     expect(unpauseRes).toBeOk(Cl.bool(true));
 
@@ -487,18 +487,18 @@ describe("Bitdap Pass - Admin Controls", () => {
       contractName,
       "transfer",
       [Cl.uint(1), Cl.principal(user)],
-      deployer
+      admin
     );
     expect(transferOk).toBeOk(Cl.bool(true));
   });
 
   it("should allow admin to set token URI and reject non-admin", () => {
-    // Mint a token as deployer
+    // Mint a token as admin
     const { result: mintRes } = simnet.callPublicFn(
       contractName,
       "mint-pass",
       [Cl.uint(2), Cl.none()],
-      deployer
+      admin
     );
     expect(mintRes).toBeOk(Cl.uint(1)); // first token after previous tests reset
 
@@ -508,7 +508,7 @@ describe("Bitdap Pass - Admin Controls", () => {
       contractName,
       "set-token-uri",
       [Cl.uint(1), newUri],
-      deployer
+      admin
     );
     expect(setUriRes).toBeOk(Cl.bool(true));
 
@@ -517,7 +517,7 @@ describe("Bitdap Pass - Admin Controls", () => {
       contractName,
       "get-token-uri",
       [Cl.uint(1)],
-      deployer
+      admin
     );
     expect(uriRes.result).toBeOk(newUri);
 
