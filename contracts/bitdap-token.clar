@@ -301,6 +301,36 @@
     (ok (var-get contract-owner))
 )
 
+;; Pause contract (only owner)
+(define-public (pause)
+    (begin
+        (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-UNAUTHORIZED)
+        (var-set token-paused true)
+        
+        (print {
+            action: "pause",
+            caller: tx-sender
+        })
+        
+        (ok true)
+    )
+)
+
+;; Unpause contract (only owner)
+(define-public (unpause)
+    (begin
+        (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-UNAUTHORIZED)
+        (var-set token-paused false)
+        
+        (print {
+            action: "unpause",
+            caller: tx-sender
+        })
+        
+        (ok true)
+    )
+)
+
 ;; Initialize contract with initial supply to deployer
 (begin
     (let ((initial-supply u1000000000)) ;; 1000 tokens with 6 decimals
