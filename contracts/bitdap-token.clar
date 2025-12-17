@@ -347,6 +347,16 @@
     )
 )
 
+;; Get pause state
+(define-read-only (is-paused)
+    (ok (var-get token-paused))
+)
+
+;; Get current token URI
+(define-read-only (get-current-uri)
+    (ok (var-get token-uri))
+)
+
 ;; Initialize contract with initial supply to deployer
 (begin
     (let ((initial-supply u1000000000)) ;; 1000 tokens with 6 decimals
