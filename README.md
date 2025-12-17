@@ -125,6 +125,7 @@ Upcoming work includes:
 - Expanding the test suite in `tests/bitdap.test.ts`.  
 - Documenting concrete integration examples for web apps and bots.
 
+
 Contributions, issues, and suggestions are welcome as the Bitdap Pass contract evolves.
 
 

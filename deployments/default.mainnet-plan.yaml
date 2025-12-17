@@ -1,0 +1,25 @@
+---
+id: 0
+name: Mainnet deployment
+network: mainnet
+stacks-node: "https://api.hiro.so"
+bitcoin-node: "http://blockstack:blockstacksystem@bitcoin.blockstack.com:8332"
+plan:
+  batches:
+    - id: 0
+      transactions:
+        - contract-publish:
+            contract-name: bitdap
+            expected-sender: SP1EQNTKNRGME36P9EEXZCFFNCYBA50VN51676JB
+            cost: 119680
+            path: contracts/bitdap.clar
+            anchor-block-only: true
+            clarity-version: 4
+        - contract-publish:
+            contract-name: bitdap-token
+            expected-sender: SP1EQNTKNRGME36P9EEXZCFFNCYBA50VN51676JB
+            cost: 92770
+            path: contracts/bitdap-token.clar
+            anchor-block-only: true
+            clarity-version: 4
+      epoch: "3.3"
