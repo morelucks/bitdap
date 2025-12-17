@@ -250,6 +250,8 @@
 ;; Burn tokens from sender's balance
 (define-public (burn (amount uint))
     (begin
+        ;; Check if contract is not paused
+        (asserts! (is-not-paused) ERR-CONTRACT-PAUSED)
         (asserts! (is-valid-amount amount) ERR-INVALID-AMOUNT)
         
         (let (
