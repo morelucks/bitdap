@@ -179,6 +179,8 @@
 ;; Transfer tokens from owner to recipient using allowance
 (define-public (transfer-from (owner principal) (recipient principal) (amount uint) (memo (optional (buff 34))))
     (begin
+        ;; Check if contract is not paused
+        (asserts! (is-not-paused) ERR-CONTRACT-PAUSED)
         ;; Validate inputs
         (asserts! (is-valid-amount amount) ERR-INVALID-AMOUNT)
         (asserts! (not (is-eq owner recipient)) ERR-SELF-TRANSFER)
