@@ -85,6 +85,8 @@
 ;; Transfer tokens from sender to recipient
 (define-public (transfer (amount uint) (sender principal) (recipient principal) (memo (optional (buff 34))))
     (begin
+        ;; Check if contract is not paused
+        (asserts! (is-not-paused) ERR-CONTRACT-PAUSED)
         ;; Validate inputs
         (asserts! (is-valid-amount amount) ERR-INVALID-AMOUNT)
         (asserts! (not (is-eq sender recipient)) ERR-SELF-TRANSFER)
