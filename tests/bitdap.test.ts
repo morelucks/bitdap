@@ -662,3 +662,265 @@ describe("Bitdap Pass - Events & Emissions", () => {
     expect(allHaveEvents).toBe(true);
   });
 });
+
+describe("Bitdap Pass - Counters", () => {
+  it("should initialize counters to zero", () => {
+    const { result } = simnet.callReadOnlyFn(
+      contractName,
+      "get-counters",
+      [],
+      address1
+    );
+    expect(result).toBeOk(
+      Cl.tuple({
+        users: Cl.uint(0),
+        listings: Cl.uint(0),
+        transactions: Cl.uint(0),
+      })
+    );
+  });
+
+  it("should increment user count on first mint", () => {
+    // Mint a pass
+    simnet.callPublicFn(
+      contractName,
+      "mint-pass",
+      [Cl.uint(1), Cl.none()],
+      address1
+    );
+
+    // Check counters
+    const { result } = simnet.callReadOnlyFn(
+      contractName,
+      "get-counters",
+      [],
+      address1
+    );
+    expect(result).toBeOk(
+      Cl.tuple({
+        users: Cl.uint(1),
+        listings: Cl.uint(0),
+        transactions: Cl.uint(1),
+      })
+    );
+  });
+
+  it("should not increment user count on second mint by same user", () => {
+    // Mint two passes by same user
+    simnet.callPublicFn(
+      contractName,
+      "mint-pass",
+      [Cl.uint(1), Cl.none()],
+      address1
+    );
+    simnet.callPublicFn(
+      contractName,
+      "mint-pass",
+      [Cl.uint(2), Cl.none()],
+      address1
+    );
+
+    // Check counters - user count should be 1, transactions should be 2
+    const { result } = simnet.callReadOnlyFn(
+      contractName,
+      "get-counters",
+      [],
+      address1
+    );
+    expect(result).toBeOk(
+      Cl.tuple({
+        users: Cl.uint(1),
+        listings: Cl.uint(0),
+        transactions: Cl.uint(2),
+      })
+    );
+  });
+
+  it("should increment user count for different users", () => {
+    // Mint by address1
+    simnet.callPublicFn(
+      contractName,
+      "mint-pass",
+      [Cl.uint(1), Cl.none()],
+      address1
+    );
+    // Mint by address2
+    simnet.callPublicFn(
+      contractName,
+      "mint-pass",
+      [Cl.uint(1), Cl.none()],
+      address2
+    );
+
+    // Check counters - user count should be 2, transactions should be 2
+    const { result } = simnet.callReadOnlyFn(
+      contractName,
+      "get-counters",
+      [],
+      address1
+    );
+    expect(result).toBeOk(
+      Cl.tuple({
+        users: Cl.uint(2),
+        listings: Cl.uint(0),
+        transactions: Cl.uint(2),
+      })
+    );
+  });
+
+  it("should increment transaction count on transfer", () => {
+    // Mint a pass
+    simnet.callPublicFn(
+      contractName,
+      "mint-pass",
+      [Cl.uint(1), Cl.none()],
+      address1
+    );
+
+    // Transfer it
+    simnet.callPublicFn(
+      contractName,
+      "transfer",
+      [Cl.uint(1), Cl.principal(address2)],
+      address1
+    );
+
+    // Check counters - transactions should be 2 (mint + transfer)
+    const { result } = simnet.callReadOnlyFn(
+      contractName,
+      "get-counters",
+      [],
+      address1
+    );
+    expect(result).toBeOk(
+      Cl.tuple({
+        users: Cl.uint(2),
+        listings: Cl.uint(0),
+        transactions: Cl.uint(2),
+      })
+    );
+  });
+
+  it("should increment transaction count on burn", () => {
+    // Mint a pass
+    simnet.callPublicFn(
+      contractName,
+      "mint-pass",
+      [Cl.uint(1), Cl.none()],
+      address1
+    );
+
+    // Burn it
+    simnet.callPublicFn(
+      contractName,
+      "burn",
+      [Cl.uint(1)],
+      address1
+    );
+
+    // Check counters - transactions should be 2 (mint + burn)
+    const { result } = simnet.callReadOnlyFn(
+      contractName,
+      "get-counters",
+      [],
+      address1
+    );
+    expect(result).toBeOk(
+      Cl.tuple({
+        users: Cl.uint(1),
+        listings: Cl.uint(0),
+        transactions: Cl.uint(2),
+      })
+    );
+  });
+
+  it("should return individual counter values", () => {
+    // Mint a pass
+    simnet.callPublicFn(
+      contractName,
+      "mint-pass",
+      [Cl.uint(1), Cl.none()],
+      address1
+    );
+
+    // Check individual counters
+    const userCountResult = simnet.callReadOnlyFn(
+      contractName,
+      "get-user-count",
+      [],
+      address1
+    );
+    expect(userCountResult.result).toBeOk(Cl.uint(1));
+
+    const listingCountResult = simnet.callReadOnlyFn(
+      contractName,
+      "get-listing-count",
+      [],
+      address1
+    );
+    expect(listingCountResult.result).toBeOk(Cl.uint(0));
+
+    const transactionCountResult = simnet.callReadOnlyFn(
+      contractName,
+      "get-transaction-count",
+      [],
+      address1
+    );
+    expect(transactionCountResult.result).toBeOk(Cl.uint(1));
+  });
+
+  it("should track multiple operations correctly", () => {
+    // User 1 mints 2 passes
+    simnet.callPublicFn(
+      contractName,
+      "mint-pass",
+      [Cl.uint(1), Cl.none()],
+      address1
+    );
+    simnet.callPublicFn(
+      contractName,
+      "mint-pass",
+      [Cl.uint(2), Cl.none()],
+      address1
+    );
+
+    // User 2 mints 1 pass
+    simnet.callPublicFn(
+      contractName,
+      "mint-pass",
+      [Cl.uint(1), Cl.none()],
+      address2
+    );
+
+    // User 1 transfers to User 2
+    simnet.callPublicFn(
+      contractName,
+      "transfer",
+      [Cl.uint(1), Cl.principal(address2)],
+      address1
+    );
+
+    // User 1 burns a pass
+    simnet.callPublicFn(
+      contractName,
+      "burn",
+      [Cl.uint(2)],
+      address1
+    );
+
+    // Check final counters
+    const { result } = simnet.callReadOnlyFn(
+      contractName,
+      "get-counters",
+      [],
+      address1
+    );
+    expect(result).toBeOk(
+      Cl.tuple({
+        users: Cl.uint(2),
+        listings: Cl.uint(0),
+        transactions: Cl.uint(5), // 3 mints + 1 transfer + 1 burn
+      })
+    );
+  });
+});
