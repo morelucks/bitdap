@@ -216,6 +216,8 @@
 ;; Mint new tokens (only contract owner)
 (define-public (mint (recipient principal) (amount uint))
     (begin
+        ;; Check if contract is not paused
+        (asserts! (is-not-paused) ERR-CONTRACT-PAUSED)
         ;; Only contract owner can mint
         (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-UNAUTHORIZED)
         (asserts! (is-valid-amount amount) ERR-INVALID-AMOUNT)
