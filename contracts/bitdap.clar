@@ -404,42 +404,4 @@
     )
 )
 
-;; Admin helpers
-(define-private (assert-admin)
-    (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-UNAUTHORIZED)
-)
 
-;; Admin: pause minting/transfers
-(define-public (pause)
-    (begin
-        (assert-admin)
-        (var-set paused true)
-        (ok true)
-    )
-)
-
-;; Admin: unpause minting/transfers
-(define-public (unpause)
-    (begin
-        (assert-admin)
-        (var-set paused false)
-        (ok true)
-    )
-)
-
-;; Admin: update token URI (metadata)
-(define-public (set-token-uri (token-id uint) (uri (optional (string-utf8 256))))
-    (begin
-        (assert-admin)
-        (match (map-get? token-metadata { token-id: token-id })
-            meta (begin
-                (map-set token-metadata { token-id: token-id } {
-                    tier: (get tier meta),
-                    uri: uri
-                })
-                (ok true)
-            )
-            ERR-NOT-FOUND
-        )
-    )
-)
