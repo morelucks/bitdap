@@ -178,19 +178,21 @@
             owner-data (let ((owner (get owner owner-data)))
                 (if (not (is-eq owner tx-sender))
                     ERR-NOT-OWNER
-                    (if (or (var-get paused) (is-eq owner recipient))
-                        (if (var-get paused) ERR-PAUSED ERR-SELF-TRANSFER)
-                        ERR-SELF-TRANSFER
-                        (begin
-                            (map-set token-owners { token-id: token-id } { owner: recipient })
-                            ;; Emit transfer event.
-                            (print (tuple
-                                (event "transfer-event")
-                                (token-id token-id)
-                                (from owner)
-                                (to recipient)
-                            ))
-                            (ok true)
+                    (if (var-get paused)
+                        ERR-PAUSED
+                        (if (is-eq owner recipient)
+                            ERR-SELF-TRANSFER
+                            (begin
+                                (map-set token-owners { token-id: token-id } { owner: recipient })
+                                ;; Emit transfer event.
+                                (print (tuple
+                                    (event "transfer-event")
+                                    (token-id token-id)
+                                    (from owner)
+                                    (to recipient)
+                                ))
+                                (ok true)
+                            )
                         )
                     )
                 )
