@@ -532,6 +532,240 @@ describe("Bitdap Pass - Admin Controls", () => {
   });
 });
 
+describe("Bitdap Pass - Admin Management", () => {
+  it("should allow admin to set a new admin", () => {
+    const currentAdmin = deployer;
+    const newAdmin = address1;
+
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "set-admin",
+      [Cl.principal(newAdmin)],
+      currentAdmin
+    );
+    expect(result).toBeOk(Cl.bool(true));
+
+    // Verify new admin is set
+    const adminResult = simnet.callReadOnlyFn(
+      contractName,
+      "get-admin",
+      [],
+      currentAdmin
+    );
+    expect(adminResult.result).toBeOk(Cl.principal(newAdmin));
+  });
+
+  it("should allow admin to transfer admin rights", () => {
+    const currentAdmin = deployer;
+    const newAdmin = address2;
+
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "transfer-admin",
+      [Cl.principal(newAdmin)],
+      currentAdmin
+    );
+    expect(result).toBeOk(Cl.bool(true));
+
+    // Verify new admin is set
+    const adminResult = simnet.callReadOnlyFn(
+      contractName,
+      "get-admin",
+      [],
+      currentAdmin
+    );
+    expect(adminResult.result).toBeOk(Cl.principal(newAdmin));
+  });
+
+  it("should reject admin change from non-admin", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "set-admin",
+      [Cl.principal(address2)],
+      address1
+    );
+    expect(result).toBeErr(Cl.uint(106)); // ERR-UNAUTHORIZED
+  });
+
+  it("should emit admin-changed event when admin is changed", () => {
+    const { result, events } = simnet.callPublicFn(
+      contractName,
+      "set-admin",
+      [Cl.principal(address1)],
+      deployer
+    );
+    expect(result).toBeOk(Cl.bool(true));
+    expect(events.length).toBeGreaterThan(0);
+
+    const hasAdminEvent = events.some((e: any) => {
+      const eventStr = JSON.stringify(e);
+      return eventStr.includes("admin-changed");
+    });
+    expect(hasAdminEvent).toBe(true);
+  });
+});
+
+describe("Bitdap Pass - Marketplace Pause Controls", () => {
+  it("should allow admin to pause marketplace", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "pause-marketplace",
+      [],
+      deployer
+    );
+    expect(result).toBeOk(Cl.bool(true));
+
+    // Verify marketplace is paused
+    const pausedResult = simnet.callReadOnlyFn(
+      contractName,
+      "is-marketplace-paused",
+      [],
+      deployer
+    );
+    expect(pausedResult.result).toBeOk(Cl.bool(true));
+  });
+
+  it("should allow admin to unpause marketplace", () => {
+    // First pause
+    simnet.callPublicFn(
+      contractName,
+      "pause-marketplace",
+      [],
+      deployer
+    );
+
+    // Then unpause
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "unpause-marketplace",
+      [],
+      deployer
+    );
+    expect(result).toBeOk(Cl.bool(true));
+
+    // Verify marketplace is unpaused
+    const pausedResult = simnet.callReadOnlyFn(
+      contractName,
+      "is-marketplace-paused",
+      [],
+      deployer
+    );
+    expect(pausedResult.result).toBeOk(Cl.bool(false));
+  });
+
+  it("should reject marketplace pause from non-admin", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "pause-marketplace",
+      [],
+      address1
+    );
+    expect(result).toBeErr(Cl.uint(106)); // ERR-UNAUTHORIZED
+  });
+
+  it("should reject marketplace unpause from non-admin", () => {
+    simnet.callPublicFn(
+      contractName,
+      "pause-marketplace",
+      [],
+      deployer
+    );
+
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "unpause-marketplace",
+      [],
+      address1
+    );
+    expect(result).toBeErr(Cl.uint(106)); // ERR-UNAUTHORIZED
+  });
+
+  it("should block mint when marketplace is paused", () => {
+    // Pause marketplace
+    simnet.callPublicFn(
+      contractName,
+      "pause-marketplace",
+      [],
+      deployer
+    );
+
+    // Try to mint
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "mint-pass",
+      [Cl.uint(1), Cl.none()],
+      address1
+    );
+    expect(result).toBeErr(Cl.uint(107)); // ERR-PAUSED
+  });
+
+  it("should allow mint after marketplace is unpaused", () => {
+    // Pause then unpause
+    simnet.callPublicFn(
+      contractName,
+      "pause-marketplace",
+      [],
+      deployer
+    );
+    simnet.callPublicFn(
+      contractName,
+      "unpause-marketplace",
+      [],
+      deployer
+    );
+
+    // Mint should succeed
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "mint-pass",
+      [Cl.uint(1), Cl.none()],
+      address1
+    );
+    expect(result).toBeOk(Cl.uint(1));
+  });
+
+  it("should emit marketplace-paused event", () => {
+    const { result, events } = simnet.callPublicFn(
+      contractName,
+      "pause-marketplace",
+      [],
+      deployer
+    );
+    expect(result).toBeOk(Cl.bool(true));
+    expect(events.length).toBeGreaterThan(0);
+
+    const hasPauseEvent = events.some((e: any) => {
+      const eventStr = JSON.stringify(e);
+      return eventStr.includes("marketplace-paused");
+    });
+    expect(hasPauseEvent).toBe(true);
+  });
+
+  it("should emit marketplace-unpaused event", () => {
+    simnet.callPublicFn(
+      contractName,
+      "pause-marketplace",
+      [],
+      deployer
+    );
+
+    const { result, events } = simnet.callPublicFn(
+      contractName,
+      "unpause-marketplace",
+      [],
+      deployer
+    );
+    expect(result).toBeOk(Cl.bool(true));
+    expect(events.length).toBeGreaterThan(0);
+
+    const hasUnpauseEvent = events.some((e: any) => {
+      const eventStr = JSON.stringify(e);
+      return eventStr.includes("marketplace-unpaused");
+    });
+    expect(hasUnpauseEvent).toBe(true);
+  });
+});
+
 describe("Bitdap Pass - Events & Emissions", () => {
   it("should emit mint-event when a pass is minted", () => {
     const { result, events } = simnet.callPublicFn(
