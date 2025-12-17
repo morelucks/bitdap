@@ -141,9 +141,9 @@
     (ok (var-get total-supply))
 )
 
-;; Get token URI (not implemented for fungible tokens)
+;; Get token URI
 (define-read-only (get-token-uri)
-    (ok none)
+    (ok (var-get token-uri))
 )
 
 ;; Additional ERC20-like functions
@@ -325,6 +325,22 @@
         (print {
             action: "unpause",
             caller: tx-sender
+        })
+        
+        (ok true)
+    )
+)
+
+;; Set token URI (only owner)
+(define-public (set-token-uri (new-uri (optional (string-utf8 256))))
+    (begin
+        (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-UNAUTHORIZED)
+        (var-set token-uri new-uri)
+        
+        (print {
+            action: "set-token-uri",
+            caller: tx-sender,
+            new-uri: new-uri
         })
         
         (ok true)
