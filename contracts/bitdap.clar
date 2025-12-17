@@ -65,6 +65,9 @@
 ;; Pause flag (when true, mint/transfer are disabled)
 (define-data-var paused bool false)
 
+;; Marketplace pause flag (when true, marketplace operations are disabled)
+(define-data-var marketplace-paused bool false)
+
 ;; data maps
 ;; - Storage for token ownership, metadata, and per-tier supply.
 
@@ -111,6 +114,7 @@
     )
     (begin
         (asserts! (not (var-get paused)) ERR-PAUSED)
+        (asserts! (not (var-get marketplace-paused)) ERR-PAUSED)
         ;; Validate tier first.
         (if (not (is-valid-tier tier))
             ERR-INVALID-TIER
@@ -379,4 +383,62 @@
             ERR-NOT-FOUND
         )
     )
+)
+
+;; Admin: set a new admin (transfer admin rights)
+(define-public (set-admin (new-admin principal))
+    (begin
+        (assert-admin)
+        (var-set contract-owner new-admin)
+        ;; Emit admin change event
+        (print (tuple
+            (event "admin-changed")
+            (old-admin tx-sender)
+            (new-admin new-admin)
+        ))
+        (ok true)
+    )
+)
+
+;; Admin: transfer admin rights (alias for set-admin)
+(define-public (transfer-admin (new-admin principal))
+    (set-admin new-admin)
+)
+
+;; Admin: pause marketplace (blocks create/purchase operations)
+(define-public (pause-marketplace)
+    (begin
+        (assert-admin)
+        (var-set marketplace-paused true)
+        ;; Emit marketplace pause event
+        (print (tuple
+            (event "marketplace-paused")
+            (admin tx-sender)
+        ))
+        (ok true)
+    )
+)
+
+;; Admin: unpause marketplace
+(define-public (unpause-marketplace)
+    (begin
+        (assert-admin)
+        (var-set marketplace-paused false)
+        ;; Emit marketplace unpause event
+        (print (tuple
+            (event "marketplace-unpaused")
+            (admin tx-sender)
+        ))
+        (ok true)
+    )
+)
+
+;; Read-only: check if marketplace is paused
+(define-read-only (is-marketplace-paused)
+    (ok (var-get marketplace-paused))
+)
+
+;; Read-only: get current admin
+(define-read-only (get-admin)
+    (ok (var-get contract-owner))
 )
