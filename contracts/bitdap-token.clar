@@ -47,6 +47,11 @@
     (> amount u0)
 )
 
+;; Check if contract is not paused
+(define-private (is-not-paused)
+    (not (var-get token-paused))
+)
+
 ;; Get balance for a principal (returns 0 if not found)
 (define-private (get-balance-or-default (account principal))
     (default-to u0 (map-get? balances account))
