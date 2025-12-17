@@ -453,7 +453,7 @@ describe("Bitdap Pass - Admin Controls", () => {
       [Cl.uint(1), Cl.none()],
       deployer
     );
-    expect(mintRes).toBeErr(Cl.err(Cl.uint(107)));
+    expect(mintRes).toBeErr(Cl.uint(107));
 
     // Prepare a minted token before transfer test: unpause -> mint -> pause
     simnet.callPublicFn(contractName, "unpause", [], deployer);
@@ -472,7 +472,7 @@ describe("Bitdap Pass - Admin Controls", () => {
       [Cl.uint(1), Cl.principal(user)],
       deployer
     );
-    expect(transferRes).toBeErr(Cl.err(Cl.uint(107)));
+    expect(transferRes).toBeErr(Cl.uint(107));
 
     // Unpause and transfer should succeed
     const unpauseRes = simnet.callPublicFn(
@@ -503,7 +503,7 @@ describe("Bitdap Pass - Admin Controls", () => {
     expect(mintRes).toBeOk(Cl.uint(1)); // first token after previous tests reset
 
     // Set URI as admin
-    const newUri = Cl.some(Cl.utf8("https://example.com/bitdap/1.json"));
+    const newUri = Cl.some(Cl.stringUtf8("https://example.com/bitdap/1.json"));
     const setUriRes = simnet.callPublicFn(
       contractName,
       "set-token-uri",
@@ -525,10 +525,10 @@ describe("Bitdap Pass - Admin Controls", () => {
     const setUriNonAdmin = simnet.callPublicFn(
       contractName,
       "set-token-uri",
-      [Cl.uint(1), Cl.some(Cl.utf8("https://not-allowed"))],
+      [Cl.uint(1), Cl.some(Cl.stringUtf8("https://not-allowed"))],
       user
     );
-    expect(setUriNonAdmin).toBeErr(Cl.err(Cl.uint(106)));
+    expect(setUriNonAdmin).toBeErr(Cl.uint(106));
   });
 });
 
