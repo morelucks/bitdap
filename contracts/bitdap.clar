@@ -65,6 +65,15 @@
 ;; Pause flag (when true, mint/transfer are disabled)
 (define-data-var paused bool false)
 
+;; Counter for total transactions (mints, transfers, burns)
+(define-data-var transaction-count uint u0)
+
+;; Counter for total listings in marketplace
+(define-data-var listing-count uint u0)
+
+;; Counter for unique users who have interacted with the contract
+(define-data-var user-count uint u0)
+
 ;; data maps
 ;; - Storage for token ownership, metadata, and per-tier supply.
 
@@ -87,6 +96,12 @@
 (define-map tier-supplies
     { tier: uint }
     { supply: uint }
+)
+
+;; principal -> bool (tracks if user has interacted with contract)
+(define-map user-registry
+    { user: principal }
+    { active: bool }
 )
 
 ;; public functions
@@ -144,6 +159,16 @@
                                     (map-set tier-supplies { tier: tier } { supply: new-tier-supply })
                                     (var-set total-supply new-total)
                                     (var-set next-token-id (+ token-id u1))
+                                    ;; Track user if new
+                                    (if (is-none (map-get? user-registry { user: recipient }))
+                                        (begin
+                                            (map-set user-registry { user: recipient } { active: true })
+                                            (var-set user-count (+ (var-get user-count) u1))
+                                        )
+                                        true
+                                    )
+                                    ;; Increment transaction count
+                                    (var-set transaction-count (+ (var-get transaction-count) u1))
                                     ;; Emit mint event.
                                     (print (tuple
                                         (event "mint-event")
@@ -174,19 +199,31 @@
             owner-data (let ((owner (get owner owner-data)))
                 (if (not (is-eq owner tx-sender))
                     ERR-NOT-OWNER
-                    (if (or (var-get paused) (is-eq owner recipient))
-                        (if (var-get paused) ERR-PAUSED ERR-SELF-TRANSFER)
-                        ERR-SELF-TRANSFER
-                        (begin
-                            (map-set token-owners { token-id: token-id } { owner: recipient })
-                            ;; Emit transfer event.
-                            (print (tuple
-                                (event "transfer-event")
-                                (token-id token-id)
-                                (from owner)
-                                (to recipient)
-                            ))
-                            (ok true)
+                    (if (var-get paused)
+                        ERR-PAUSED
+                        (if (is-eq owner recipient)
+                            ERR-SELF-TRANSFER
+                            (begin
+                                (map-set token-owners { token-id: token-id } { owner: recipient })
+                                ;; Track recipient if new user
+                                (if (is-none (map-get? user-registry { user: recipient }))
+                                    (begin
+                                        (map-set user-registry { user: recipient } { active: true })
+                                        (var-set user-count (+ (var-get user-count) u1))
+                                    )
+                                    true
+                                )
+                                ;; Increment transaction count
+                                (var-set transaction-count (+ (var-get transaction-count) u1))
+                                ;; Emit transfer event.
+                                (print (tuple
+                                    (event "transfer-event")
+                                    (token-id token-id)
+                                    (from owner)
+                                    (to recipient)
+                                ))
+                                (ok true)
+                            )
                         )
                     )
                 )
@@ -229,6 +266,8 @@
                                                 u0
                                             ))
                                     )
+                                    ;; Increment transaction count
+                                    (var-set transaction-count (+ (var-get transaction-count) u1))
                                     ;; Emit burn event.
                                     (print (tuple
                                         (event "burn-event")
@@ -306,6 +345,30 @@
         )
         (ok (get supply row))
     )
+)
+
+;; Returns all counters in a single call: users, listings, transactions
+(define-read-only (get-counters)
+    (ok (tuple
+        (users (var-get user-count))
+        (listings (var-get listing-count))
+        (transactions (var-get transaction-count))
+    ))
+)
+
+;; Returns the user count
+(define-read-only (get-user-count)
+    (ok (var-get user-count))
+)
+
+;; Returns the listing count
+(define-read-only (get-listing-count)
+    (ok (var-get listing-count))
+)
+
+;; Returns the transaction count
+(define-read-only (get-transaction-count)
+    (ok (var-get transaction-count))
 )
 
 ;; private functions
