@@ -92,6 +92,12 @@
     { supply: uint }
 )
 
+;; principal -> bool (tracks if user has interacted with contract)
+(define-map user-registry
+    { user: principal }
+    { active: bool }
+)
+
 ;; public functions
 ;; - Core NFT operations: mint, transfer, burn.
 
@@ -148,6 +154,16 @@
                                     (map-set tier-supplies { tier: tier } { supply: new-tier-supply })
                                     (var-set total-supply new-total)
                                     (var-set next-token-id (+ token-id u1))
+                                    ;; Track user if new
+                                    (if (is-none (map-get? user-registry { user: recipient }))
+                                        (begin
+                                            (map-set user-registry { user: recipient } { active: true })
+                                            (var-set user-count (+ (var-get user-count) u1))
+                                        )
+                                        true
+                                    )
+                                    ;; Increment transaction count
+                                    (var-set transaction-count (+ (var-get transaction-count) u1))
                                     ;; Emit mint event.
                                     (print (tuple
                                         (event "mint-event")
@@ -235,6 +251,8 @@
                                                 u0
                                             ))
                                     )
+                                    ;; Increment transaction count
+                                    (var-set transaction-count (+ (var-get transaction-count) u1))
                                     ;; Emit burn event.
                                     (print (tuple
                                         (event "burn-event")
@@ -312,6 +330,30 @@
         )
         (ok (get supply row))
     )
+)
+
+;; Returns all counters in a single call: users, listings, transactions
+(define-read-only (get-counters)
+    (ok (tuple
+        (users (var-get user-count))
+        (listings (var-get listing-count))
+        (transactions (var-get transaction-count))
+    ))
+)
+
+;; Returns the user count
+(define-read-only (get-user-count)
+    (ok (var-get user-count))
+)
+
+;; Returns the listing count
+(define-read-only (get-listing-count)
+    (ok (var-get listing-count))
+)
+
+;; Returns the transaction count
+(define-read-only (get-transaction-count)
+    (ok (var-get transaction-count))
 )
 
 ;; private functions
