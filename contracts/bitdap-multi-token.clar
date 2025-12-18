@@ -277,3 +277,82 @@
         (ok true)
     )
 )
+
+;; Batch transfer multiple tokens from sender to recipient
+(define-public (batch-transfer-from (from principal) (to principal) (token-ids (list 10 uint)) (amounts (list 10 uint)))
+    (begin
+        (asserts! (not (var-get contract-paused)) ERR-CONTRACT-PAUSED)
+        (asserts! (not (is-eq from to)) ERR-SELF-TRANSFER)
+        (asserts! (is-eq from tx-sender) ERR-UNAUTHORIZED)
+        (asserts! (is-eq (len token-ids) (len amounts)) ERR-INVALID-AMOUNT)
+        
+        ;; Process each token-amount pair
+        (fold batch-transfer-helper (zip token-ids amounts) (ok { from: from, to: to }))
+    )
+)
+
+;; Helper function for batch transfers
+(define-private (batch-transfer-helper 
+    (item { token-id: uint, amount: uint })
+    (acc (response { from: principal, to: principal } uint))
+)
+    (match acc
+        success-data (let (
+            (token-id (get token-id item))
+            (amount (get amount item))
+            (from (get from success-data))
+            (to (get to success-data))
+        )
+            (if (> amount u0)
+                (match (map-get? token-metadata { token-id: token-id })
+                    metadata (let (
+                        (from-balance (default-to u0 (get balance (map-get? balances { account: from, token-id: token-id }))))
+                        (to-balance (default-to u0 (get balance (map-get? balances { account: to, token-id: token-id }))))
+                    )
+                        (if (>= from-balance amount)
+                            (begin
+                                ;; Update balances
+                                (map-set balances { account: from, token-id: token-id } { balance: (- from-balance amount) })
+                                (map-set balances { account: to, token-id: token-id } { balance: (+ to-balance amount) })
+                                
+                                ;; Emit batch transfer event
+                                (print {
+                                    action: "batch-transfer",
+                                    from: from,
+                                    to: to,
+                                    token-id: token-id,
+                                    amount: amount
+                                })
+                                
+                                (ok success-data)
+                            )
+                            ERR-INSUFFICIENT-BALANCE
+                        )
+                    )
+                    ERR-TOKEN-NOT-EXISTS
+                )
+                (ok success-data)
+            )
+        )
+        error error
+    )
+)
+
+;; Safe batch transfer with additional data
+(define-public (safe-batch-transfer-from (from principal) (to principal) (token-ids (list 10 uint)) (amounts (list 10 uint)) (data (buff 256)))
+    (begin
+        (try! (batch-transfer-from from to token-ids amounts))
+        
+        ;; Emit safe batch transfer event with data
+        (print {
+            action: "safe-batch-transfer",
+            from: from,
+            to: to,
+            token-ids: token-ids,
+            amounts: amounts,
+            data: data
+        })
+        
+        (ok true)
+    )
+)
