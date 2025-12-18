@@ -10,11 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-<<<<<<< HEAD
     "@stacks/connect-react": "^7.3.1",
-=======
-    "@stacks/connect": "^7.3.1",
->>>>>>> fbfe05df7c97d70a65d1016aacd0979bb7651e9d
     "@stacks/network": "^7.3.1",
     "@stacks/transactions": "^7.3.1",
     "next": "14.2.3",
