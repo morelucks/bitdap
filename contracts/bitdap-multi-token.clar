@@ -129,3 +129,95 @@
         )
     )
 )
+
+;; Mint tokens to an account (only owner)
+(define-public (mint (to principal) (token-id uint) (amount uint))
+    (begin
+        (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-UNAUTHORIZED)
+        (asserts! (not (var-get contract-paused)) ERR-CONTRACT-PAUSED)
+        (asserts! (> amount u0) ERR-INVALID-AMOUNT)
+        
+        ;; Check if token exists
+        (match (map-get? token-metadata { token-id: token-id })
+            metadata (let (
+                (current-balance (default-to u0 (get balance (map-get? balances { account: to, token-id: token-id }))))
+                (new-balance (+ current-balance amount))
+                (current-supply (get total-supply metadata))
+                (new-supply (+ current-supply amount))
+            )
+                ;; Update balance
+                (map-set balances { account: to, token-id: token-id } { balance: new-balance })
+                
+                ;; Update total supply
+                (map-set token-metadata { token-id: token-id } (merge metadata { total-supply: new-supply }))
+                
+                ;; Emit mint event
+                (print {
+                    action: "mint",
+                    to: to,
+                    token-id: token-id,
+                    amount: amount,
+                    new-balance: new-balance,
+                    new-supply: new-supply
+                })
+                
+                (ok true)
+            )
+            ERR-TOKEN-NOT-EXISTS
+        )
+    )
+)
+
+;; Batch mint multiple tokens to an account (only owner)
+(define-public (batch-mint (to principal) (token-ids (list 10 uint)) (amounts (list 10 uint)))
+    (begin
+        (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-UNAUTHORIZED)
+        (asserts! (not (var-get contract-paused)) ERR-CONTRACT-PAUSED)
+        (asserts! (is-eq (len token-ids) (len amounts)) ERR-INVALID-AMOUNT)
+        
+        ;; Process each token-amount pair
+        (fold batch-mint-helper (zip token-ids amounts) (ok true))
+    )
+)
+
+;; Helper function for batch minting
+(define-private (batch-mint-helper 
+    (item { token-id: uint, amount: uint })
+    (acc (response bool uint))
+)
+    (match acc
+        success (let (
+            (token-id (get token-id item))
+            (amount (get amount item))
+        )
+            (if (> amount u0)
+                (match (map-get? token-metadata { token-id: token-id })
+                    metadata (let (
+                        (current-balance (default-to u0 (get balance (map-get? balances { account: tx-sender, token-id: token-id }))))
+                        (new-balance (+ current-balance amount))
+                        (current-supply (get total-supply metadata))
+                        (new-supply (+ current-supply amount))
+                    )
+                        ;; Update balance and supply
+                        (map-set balances { account: tx-sender, token-id: token-id } { balance: new-balance })
+                        (map-set token-metadata { token-id: token-id } (merge metadata { total-supply: new-supply }))
+                        (ok true)
+                    )
+                    ERR-TOKEN-NOT-EXISTS
+                )
+                (ok true)
+            )
+        )
+        error error
+    )
+)
+
+;; Helper function to zip two lists
+(define-private (zip (list-a (list 10 uint)) (list-b (list 10 uint)))
+    (map zip-helper list-a list-b)
+)
+
+;; Helper function for zipping
+(define-private (zip-helper (a uint) (b uint))
+    { token-id: a, amount: b }
+)
