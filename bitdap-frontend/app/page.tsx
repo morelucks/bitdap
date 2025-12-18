@@ -1,4 +1,7 @@
+'use client';
+
 import { contractsConfig, formatNetworkLabel } from "@config/contracts";
+import { WalletConnect } from "@/components/WalletConnect";
 
 const sections = [
   {
@@ -43,6 +46,10 @@ export default function Home() {
         <span className="small">
           Update .env.local with contract addresses and network.
         </span>
+      </div>
+
+      <div style={{ marginBottom: 32 }}>
+        <WalletConnect />
       </div>
 
       <div className="grid">
