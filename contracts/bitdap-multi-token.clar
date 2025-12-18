@@ -221,3 +221,59 @@
 (define-private (zip-helper (a uint) (b uint))
     { token-id: a, amount: b }
 )
+
+;; Transfer tokens from sender to recipient
+(define-public (transfer-from (from principal) (to principal) (token-id uint) (amount uint))
+    (begin
+        (asserts! (not (var-get contract-paused)) ERR-CONTRACT-PAUSED)
+        (asserts! (> amount u0) ERR-INVALID-AMOUNT)
+        (asserts! (not (is-eq from to)) ERR-SELF-TRANSFER)
+        (asserts! (is-eq from tx-sender) ERR-UNAUTHORIZED) ;; For now, only owner can transfer their tokens
+        
+        ;; Check if token exists
+        (match (map-get? token-metadata { token-id: token-id })
+            metadata (let (
+                (from-balance (default-to u0 (get balance (map-get? balances { account: from, token-id: token-id }))))
+                (to-balance (default-to u0 (get balance (map-get? balances { account: to, token-id: token-id }))))
+            )
+                ;; Check sufficient balance
+                (asserts! (>= from-balance amount) ERR-INSUFFICIENT-BALANCE)
+                
+                ;; Update balances
+                (map-set balances { account: from, token-id: token-id } { balance: (- from-balance amount) })
+                (map-set balances { account: to, token-id: token-id } { balance: (+ to-balance amount) })
+                
+                ;; Emit transfer event
+                (print {
+                    action: "transfer",
+                    from: from,
+                    to: to,
+                    token-id: token-id,
+                    amount: amount
+                })
+                
+                (ok true)
+            )
+            ERR-TOKEN-NOT-EXISTS
+        )
+    )
+)
+
+;; Safe transfer with additional data
+(define-public (safe-transfer-from (from principal) (to principal) (token-id uint) (amount uint) (data (buff 256)))
+    (begin
+        (try! (transfer-from from to token-id amount))
+        
+        ;; Emit safe transfer event with data
+        (print {
+            action: "safe-transfer",
+            from: from,
+            to: to,
+            token-id: token-id,
+            amount: amount,
+            data: data
+        })
+        
+        (ok true)
+    )
+)
