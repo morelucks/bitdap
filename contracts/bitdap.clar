@@ -18,7 +18,9 @@
 ;;   - burn-event: emitted when a pass is burned (token-id, owner, tier)
 
 ;; traits
-;; - Trait definitions can be added here (e.g., SIP-009) for interface compatibility.
+;; SIP-009 NFT trait implementation
+(use-trait nft-trait 'SP2PABAF9FTAJYNFZH93XENAJ8FVY99RRM50D2JG9.nft-trait.nft-trait)
+(impl-trait 'SP2PABAF9FTAJYNFZH93XENAJ8FVY99RRM50D2JG9.nft-trait.nft-trait)
 
 ;; token definitions
 ;; - Bitdap Pass uses uint token-ids (u1, u2, ...) to identify each NFT.
@@ -308,6 +310,16 @@
     (match (map-get? token-metadata { token-id: token-id })
         meta (ok (get uri meta))
         ERR-NOT-FOUND
+    )
+)
+
+;; SIP-009: transfer function with memo support
+(define-public (transfer-memo (token-id uint) (sender principal) (recipient principal) (memo (buff 34)))
+    (begin
+        (asserts! (is-eq sender tx-sender) ERR-NOT-OWNER)
+        (try! (transfer token-id recipient))
+        (print memo)
+        (ok true)
     )
 )
 
