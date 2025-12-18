@@ -429,3 +429,108 @@
 (define-read-only (get-allowance (owner principal) (spender principal) (token-id uint))
     (ok (default-to u0 (get allowance (map-get? token-allowances { owner: owner, spender: spender, token-id: token-id }))))
 )
+
+;; Burning functionality
+
+;; Burn tokens from account (only token owner or approved operator)
+(define-public (burn (from principal) (token-id uint) (amount uint))
+    (begin
+        (asserts! (not (var-get contract-paused)) ERR-CONTRACT-PAUSED)
+        (asserts! (> amount u0) ERR-INVALID-AMOUNT)
+        
+        ;; Check authorization (owner or approved operator)
+        (asserts! (or 
+            (is-eq from tx-sender)
+            (unwrap-panic (is-approved-for-all from tx-sender))
+        ) ERR-UNAUTHORIZED)
+        
+        ;; Check if token exists
+        (match (map-get? token-metadata { token-id: token-id })
+            metadata (let (
+                (current-balance (default-to u0 (get balance (map-get? balances { account: from, token-id: token-id }))))
+                (current-supply (get total-supply metadata))
+            )
+                ;; Check sufficient balance
+                (asserts! (>= current-balance amount) ERR-INSUFFICIENT-BALANCE)
+                
+                ;; Update balance and total supply
+                (map-set balances { account: from, token-id: token-id } { balance: (- current-balance amount) })
+                (map-set token-metadata { token-id: token-id } (merge metadata { total-supply: (- current-supply amount) }))
+                
+                ;; Emit burn event
+                (print {
+                    action: "burn",
+                    from: from,
+                    token-id: token-id,
+                    amount: amount,
+                    new-balance: (- current-balance amount),
+                    new-supply: (- current-supply amount)
+                })
+                
+                (ok true)
+            )
+            ERR-TOKEN-NOT-EXISTS
+        )
+    )
+)
+
+;; Batch burn multiple tokens from account
+(define-public (batch-burn (from principal) (token-ids (list 10 uint)) (amounts (list 10 uint)))
+    (begin
+        (asserts! (not (var-get contract-paused)) ERR-CONTRACT-PAUSED)
+        (asserts! (is-eq (len token-ids) (len amounts)) ERR-INVALID-AMOUNT)
+        
+        ;; Check authorization
+        (asserts! (or 
+            (is-eq from tx-sender)
+            (unwrap-panic (is-approved-for-all from tx-sender))
+        ) ERR-UNAUTHORIZED)
+        
+        ;; Process each token-amount pair
+        (fold batch-burn-helper (zip token-ids amounts) (ok from))
+    )
+)
+
+;; Helper function for batch burning
+(define-private (batch-burn-helper 
+    (item { token-id: uint, amount: uint })
+    (acc (response principal uint))
+)
+    (match acc
+        from-account (let (
+            (token-id (get token-id item))
+            (amount (get amount item))
+        )
+            (if (> amount u0)
+                (match (map-get? token-metadata { token-id: token-id })
+                    metadata (let (
+                        (current-balance (default-to u0 (get balance (map-get? balances { account: from-account, token-id: token-id }))))
+                        (current-supply (get total-supply metadata))
+                    )
+                        (if (>= current-balance amount)
+                            (begin
+                                ;; Update balance and supply
+                                (map-set balances { account: from-account, token-id: token-id } { balance: (- current-balance amount) })
+                                (map-set token-metadata { token-id: token-id } (merge metadata { total-supply: (- current-supply amount) }))
+                                
+                                ;; Emit batch burn event
+                                (print {
+                                    action: "batch-burn",
+                                    from: from-account,
+                                    token-id: token-id,
+                                    amount: amount
+                                })
+                                
+                                (ok from-account)
+                            )
+                            ERR-INSUFFICIENT-BALANCE
+                        )
+                    )
+                    ERR-TOKEN-NOT-EXISTS
+                )
+                (ok from-account)
+            )
+        )
+        error error
+    )
+)
