@@ -18,7 +18,9 @@
 ;;   - burn-event: emitted when a pass is burned (token-id, owner, tier)
 
 ;; traits
-;; - Trait definitions can be added here (e.g., SIP-009) for interface compatibility.
+;; SIP-009 NFT trait implementation
+(use-trait nft-trait 'SP2PABAF9FTAJYNFZH93XENAJ8FVY99RRM50D2JG9.nft-trait.nft-trait)
+(impl-trait 'SP2PABAF9FTAJYNFZH93XENAJ8FVY99RRM50D2JG9.nft-trait.nft-trait)
 
 ;; token definitions
 ;; - Bitdap Pass uses uint token-ids (u1, u2, ...) to identify each NFT.
@@ -311,6 +313,16 @@
     )
 )
 
+;; SIP-009: transfer function with memo support
+(define-public (transfer-memo (token-id uint) (sender principal) (recipient principal) (memo (buff 34)))
+    (begin
+        (asserts! (is-eq sender tx-sender) ERR-NOT-OWNER)
+        (try! (transfer token-id recipient))
+        (print memo)
+        (ok true)
+    )
+)
+
 ;; Returns the full metadata record for a given token-id.
 (define-read-only (get-token-metadata (token-id uint))
     (match (map-get? token-metadata { token-id: token-id })
@@ -489,4 +501,122 @@
 ;; Read-only: get current admin
 (define-read-only (get-admin)
     (ok (var-get contract-owner))
+)
+
+;; Batch operations for efficiency
+
+;; Batch mint multiple passes to different recipients
+(define-public (batch-mint (recipients (list 10 { recipient: principal, tier: uint, uri: (optional (string-utf8 256)) })))
+    (begin
+        (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-UNAUTHORIZED)
+        (asserts! (not (var-get paused)) ERR-PAUSED)
+        (fold batch-mint-helper recipients (ok (list)))
+    )
+)
+
+;; Helper function for batch minting
+(define-private (batch-mint-helper 
+    (item { recipient: principal, tier: uint, uri: (optional (string-utf8 256)) })
+    (acc (response (list 10 uint) uint))
+)
+    (match acc
+        success-list (let (
+            (current-total (var-get total-supply))
+            (new-total (+ current-total u1))
+            (tier (get tier item))
+            (recipient (get recipient item))
+            (uri (get uri item))
+        )
+            (if (and 
+                (is-valid-tier tier)
+                (<= new-total MAX-SUPPLY)
+                (not (is-tier-over-max? tier (+ (get supply (default-to { supply: u0 } (map-get? tier-supplies { tier: tier }))) u1)))
+            )
+                (let (
+                    (token-id (var-get next-token-id))
+                    (tier-row (default-to { supply: u0 } (map-get? tier-supplies { tier: tier })))
+                    (tier-supply (get supply tier-row))
+                    (new-tier-supply (+ tier-supply u1))
+                )
+                    (begin
+                        ;; Write ownership and metadata
+                        (map-set token-owners { token-id: token-id } { owner: recipient })
+                        (map-set token-metadata { token-id: token-id } {
+                            tier: tier,
+                            uri: uri,
+                        })
+                        ;; Update counters
+                        (map-set tier-supplies { tier: tier } { supply: new-tier-supply })
+                        (var-set total-supply new-total)
+                        (var-set next-token-id (+ token-id u1))
+                        ;; Track user if new
+                        (if (is-none (map-get? user-registry { user: recipient }))
+                            (begin
+                                (map-set user-registry { user: recipient } { active: true })
+                                (var-set user-count (+ (var-get user-count) u1))
+                            )
+                            true
+                        )
+                        ;; Increment transaction count
+                        (var-set transaction-count (+ (var-get transaction-count) u1))
+                        ;; Emit mint event
+                        (print (tuple
+                            (event "batch-mint-event")
+                            (token-id token-id)
+                            (owner recipient)
+                            (tier tier)
+                        ))
+                        (ok (unwrap-panic (as-max-len? (append success-list token-id) u10)))
+                    )
+                )
+                acc ;; Return unchanged if validation fails
+            )
+        )
+        error error
+    )
+)
+
+;; Batch transfer multiple tokens (owner must be tx-sender for all)
+(define-public (batch-transfer (transfers (list 10 { token-id: uint, recipient: principal })))
+    (begin
+        (asserts! (not (var-get paused)) ERR-PAUSED)
+        (fold batch-transfer-helper transfers (ok true))
+    )
+)
+
+;; Helper function for batch transfers
+(define-private (batch-transfer-helper 
+    (item { token-id: uint, recipient: principal })
+    (acc (response bool uint))
+)
+    (match acc
+        success (let (
+            (token-id (get token-id item))
+            (recipient (get recipient item))
+            (owner-row (map-get? token-owners { token-id: token-id }))
+        )
+            (match owner-row
+                owner-data (let ((owner (get owner owner-data)))
+                    (if (and 
+                        (is-eq owner tx-sender)
+                        (not (is-eq owner recipient))
+                    )
+                        (begin
+                            (map-set token-owners { token-id: token-id } { owner: recipient })
+                            (print (tuple
+                                (event "batch-transfer-event")
+                                (token-id token-id)
+                                (from owner)
+                                (to recipient)
+                            ))
+                            (ok true)
+                        )
+                        ERR-NOT-OWNER
+                    )
+                )
+                ERR-NOT-FOUND
+            )
+        )
+        error error
+    )
 )

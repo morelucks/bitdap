@@ -69,7 +69,7 @@ export class TokenService {
         functionName: 'transfer',
         functionArgs: [
           uintCV(amount),
-          standardPrincipalCV(senderKey), // sender
+          standardPrincipalCV(senderKey), // sender (tx-sender will be validated in contract)
           standardPrincipalCV(recipient),
           memo ? noneCV() : noneCV(), // memo is optional
         ],
