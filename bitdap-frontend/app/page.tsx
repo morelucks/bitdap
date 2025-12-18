@@ -1,4 +1,7 @@
+'use client';
+
 import { contractsConfig, formatNetworkLabel } from "@config/contracts";
+import { ContractInfo } from "@/components/ContractInfo";
 
 const sections = [
   {
@@ -44,6 +47,8 @@ export default function Home() {
           Update .env.local with contract addresses and network.
         </span>
       </div>
+
+      <ContractInfo />
 
       <div className="grid">
         {sections.map((section) => (
