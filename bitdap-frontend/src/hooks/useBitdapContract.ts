@@ -1,13 +1,12 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { useConnect } from "@stacks/connect-react";
-import { makeContractCall, broadcastTransaction, uintCV, principalCV, noneCV, someCV, stringUtf8CV, ClarityValue } from "@stacks/transactions";
+import { openContractCall } from "@stacks/connect";
+import { uintCV, principalCV, noneCV, someCV, stringUtf8CV, ClarityValue } from "@stacks/transactions";
 import { contractsConfig } from "@config/contracts";
 import { useWallet } from "@context/WalletContext";
 
 export function useBitdapContract() {
-  const { doContractCall } = useConnect();
   const { network, address } = useWallet();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -29,8 +28,8 @@ export function useBitdapContract() {
       setLoading(true);
       setError(null);
 
-      try {
-        const result = await doContractCall({
+      return new Promise((resolve) => {
+        openContractCall({
           contractAddress,
           contractName,
           functionName,
@@ -40,20 +39,17 @@ export function useBitdapContract() {
           onFinish: (data) => {
             console.log("Transaction finished:", data);
             setLoading(false);
+            resolve(data);
           },
           onCancel: () => {
             setError("Transaction cancelled");
             setLoading(false);
+            resolve(null);
           },
         });
-        return result;
-      } catch (err: any) {
-        setError(err.message || "Transaction failed");
-        setLoading(false);
-        return null;
-      }
+      });
     },
-    [address, contractAddress, contractName, network, doContractCall]
+    [address, contractAddress, contractName, network]
   );
 
   const mintPass = useCallback(
@@ -111,4 +107,3 @@ export function useBitdapContract() {
     contractAddress: `${contractAddress}.${contractName}`,
   };
 }
-

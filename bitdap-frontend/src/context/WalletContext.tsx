@@ -1,7 +1,7 @@
 "use client";
 
-import { createContext, useContext, ReactNode } from "react";
-import { useConnect } from "@stacks/connect-react";
+import { createContext, useContext, ReactNode, useState, useEffect, useCallback } from "react";
+import { showConnect } from "@stacks/connect";
 import { StacksMainnet, StacksTestnet } from "@stacks/network";
 import { contractsConfig } from "@config/contracts";
 
@@ -11,55 +11,63 @@ interface WalletContextType {
   network: StacksMainnet | StacksTestnet;
   connect: () => void;
   disconnect: () => void;
-  userData: any;
 }
 
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
 
 export function WalletProvider({ children }: { children: ReactNode }) {
-  const { authenticate, userData } = useConnect();
+  const [address, setAddress] = useState<string | null>(null);
+  const [isConnecting, setIsConnecting] = useState(false);
 
   const network =
     contractsConfig.network === "mainnet"
       ? new StacksMainnet({ url: contractsConfig.apiBase })
       : new StacksTestnet({ url: contractsConfig.apiBase });
 
-  const address =
-    userData?.profile?.stxAddress?.[contractsConfig.network] || null;
-  const isConnected = !!address;
+  // Load saved address from localStorage
+  useEffect(() => {
+    const savedAddress = localStorage.getItem("bitdap_wallet_address");
+    if (savedAddress) {
+      setAddress(savedAddress);
+    }
+  }, []);
 
-  const connect = () => {
-    authenticate({
+  const connect = useCallback(() => {
+    setIsConnecting(true);
+    
+    showConnect({
       appDetails: {
         name: "Bitdap",
         icon: "https://bitdap.com/icon.png",
       },
       network,
-      onFinish: () => {
-        console.log("Wallet connected");
+      onFinish: (data) => {
+        const userAddress = data.profile?.stxAddress?.[contractsConfig.network];
+        if (userAddress) {
+          setAddress(userAddress);
+          localStorage.setItem("bitdap_wallet_address", userAddress);
+        }
+        setIsConnecting(false);
       },
       onCancel: () => {
-        console.log("Connection cancelled");
+        setIsConnecting(false);
       },
     });
-  };
+  }, [network]);
 
-  const disconnect = () => {
-    // Note: @stacks/connect-react doesn't have a built-in disconnect
-    // User would need to disconnect from their wallet extension
-    // This is a placeholder for future implementation
-    console.log("Disconnect - user must disconnect from wallet extension");
-  };
+  const disconnect = useCallback(() => {
+    setAddress(null);
+    localStorage.removeItem("bitdap_wallet_address");
+  }, []);
 
   return (
     <WalletContext.Provider
       value={{
-        isConnected,
+        isConnected: !!address,
         address,
         network,
         connect,
         disconnect,
-        userData,
       }}
     >
       {children}
