@@ -67,3 +67,65 @@
 (define-read-only (get-next-token-id)
     (ok (var-get next-token-id))
 )
+
+;; Get token metadata
+(define-read-only (get-token-metadata (token-id uint))
+    (match (map-get? token-metadata { token-id: token-id })
+        metadata (ok metadata)
+        ERR-TOKEN-NOT-EXISTS
+    )
+)
+
+;; Get balance of account for specific token
+(define-read-only (get-balance (account principal) (token-id uint))
+    (ok (default-to u0 (get balance (map-get? balances { account: account, token-id: token-id }))))
+)
+
+;; Check if token exists
+(define-read-only (token-exists (token-id uint))
+    (ok (is-some (map-get? token-metadata { token-id: token-id })))
+)
+
+;; Public functions
+
+;; Create a new token type (only owner)
+(define-public (create-token 
+    (name (string-utf8 64))
+    (symbol (string-utf8 16))
+    (decimals uint)
+    (is-fungible bool)
+    (uri (optional (string-utf8 256)))
+)
+    (begin
+        (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-UNAUTHORIZED)
+        (asserts! (not (var-get contract-paused)) ERR-CONTRACT-PAUSED)
+        
+        (let ((token-id (var-get next-token-id)))
+            ;; Create token metadata
+            (map-set token-metadata { token-id: token-id } {
+                name: name,
+                symbol: symbol,
+                decimals: decimals,
+                total-supply: u0,
+                is-fungible: is-fungible,
+                uri: uri
+            })
+            
+            ;; Increment next token ID
+            (var-set next-token-id (+ token-id u1))
+            
+            ;; Emit creation event
+            (print {
+                action: "create-token",
+                token-id: token-id,
+                name: name,
+                symbol: symbol,
+                decimals: decimals,
+                is-fungible: is-fungible,
+                creator: tx-sender
+            })
+            
+            (ok token-id)
+        )
+    )
+)
