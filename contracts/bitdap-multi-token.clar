@@ -534,3 +534,76 @@
         error error
     )
 )
+
+;; URI and metadata management
+
+;; Set URI for a specific token (only owner)
+(define-public (set-token-uri (token-id uint) (uri (optional (string-utf8 256))))
+    (begin
+        (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-UNAUTHORIZED)
+        (asserts! (not (var-get contract-paused)) ERR-CONTRACT-PAUSED)
+        
+        ;; Check if token exists
+        (match (map-get? token-metadata { token-id: token-id })
+            metadata (begin
+                ;; Update URI
+                (map-set token-metadata { token-id: token-id } (merge metadata { uri: uri }))
+                
+                ;; Emit URI update event
+                (print {
+                    action: "set-token-uri",
+                    token-id: token-id,
+                    uri: uri,
+                    updater: tx-sender
+                })
+                
+                (ok true)
+            )
+            ERR-TOKEN-NOT-EXISTS
+        )
+    )
+)
+
+;; Get URI for a specific token
+(define-read-only (get-token-uri (token-id uint))
+    (match (map-get? token-metadata { token-id: token-id })
+        metadata (ok (get uri metadata))
+        ERR-TOKEN-NOT-EXISTS
+    )
+)
+
+;; Update token name and symbol (only owner)
+(define-public (update-token-info (token-id uint) (name (string-utf8 64)) (symbol (string-utf8 16)))
+    (begin
+        (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-UNAUTHORIZED)
+        (asserts! (not (var-get contract-paused)) ERR-CONTRACT-PAUSED)
+        
+        ;; Check if token exists
+        (match (map-get? token-metadata { token-id: token-id })
+            metadata (begin
+                ;; Update name and symbol
+                (map-set token-metadata { token-id: token-id } (merge metadata { name: name, symbol: symbol }))
+                
+                ;; Emit update event
+                (print {
+                    action: "update-token-info",
+                    token-id: token-id,
+                    name: name,
+                    symbol: symbol,
+                    updater: tx-sender
+                })
+                
+                (ok true)
+            )
+            ERR-TOKEN-NOT-EXISTS
+        )
+    )
+)
+
+;; Get total supply for a specific token
+(define-read-only (get-total-supply (token-id uint))
+    (match (map-get? token-metadata { token-id: token-id })
+        metadata (ok (get total-supply metadata))
+        ERR-TOKEN-NOT-EXISTS
+    )
+)
