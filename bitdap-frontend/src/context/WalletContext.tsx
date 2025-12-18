@@ -1,14 +1,14 @@
 "use client";
 
-import { createContext, useContext, ReactNode, useState, useEffect, useCallback } from "react";
+import { createContext, useContext, ReactNode, useState, useEffect, useCallback, useMemo } from "react";
 import { showConnect } from "@stacks/connect";
-import { StacksMainnet, StacksTestnet } from "@stacks/network";
+import { STACKS_MAINNET, STACKS_TESTNET } from "@stacks/network";
 import { contractsConfig } from "@config/contracts";
 
 interface WalletContextType {
   isConnected: boolean;
   address: string | null;
-  network: StacksMainnet | StacksTestnet;
+  network: any;
   connect: () => void;
   disconnect: () => void;
 }
@@ -19,10 +19,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [address, setAddress] = useState<string | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
 
-  const network =
-    contractsConfig.network === "mainnet"
-      ? new StacksMainnet({ url: contractsConfig.apiBase })
-      : new StacksTestnet({ url: contractsConfig.apiBase });
+  const network = useMemo(() => {
+    return contractsConfig.network === "mainnet" ? STACKS_MAINNET : STACKS_TESTNET;
+  }, []);
 
   // Load saved address from localStorage
   useEffect(() => {
