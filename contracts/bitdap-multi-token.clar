@@ -46,6 +46,18 @@
     { balance: uint }
 )
 
+;; owner -> operator -> approved (for all tokens)
+(define-map operator-approvals
+    { owner: principal, operator: principal }
+    { approved: bool }
+)
+
+;; owner -> spender -> token-id -> allowance
+(define-map token-allowances
+    { owner: principal, spender: principal, token-id: uint }
+    { allowance: uint }
+)
+
 ;; Read-only functions
 
 ;; Get contract name
@@ -355,4 +367,65 @@
         
         (ok true)
     )
+)
+
+;; Approval system
+
+;; Set approval for operator to manage all tokens
+(define-public (set-approval-for-all (operator principal) (approved bool))
+    (begin
+        (asserts! (not (var-get contract-paused)) ERR-CONTRACT-PAUSED)
+        (asserts! (not (is-eq tx-sender operator)) ERR-INVALID-RECIPIENT)
+        
+        ;; Set operator approval
+        (map-set operator-approvals { owner: tx-sender, operator: operator } { approved: approved })
+        
+        ;; Emit approval event
+        (print {
+            action: "set-approval-for-all",
+            owner: tx-sender,
+            operator: operator,
+            approved: approved
+        })
+        
+        (ok true)
+    )
+)
+
+;; Check if operator is approved for all tokens
+(define-read-only (is-approved-for-all (owner principal) (operator principal))
+    (ok (default-to false (get approved (map-get? operator-approvals { owner: owner, operator: operator }))))
+)
+
+;; Approve spender for specific token amount
+(define-public (approve (spender principal) (token-id uint) (amount uint))
+    (begin
+        (asserts! (not (var-get contract-paused)) ERR-CONTRACT-PAUSED)
+        (asserts! (not (is-eq tx-sender spender)) ERR-INVALID-RECIPIENT)
+        
+        ;; Check if token exists
+        (match (map-get? token-metadata { token-id: token-id })
+            metadata (begin
+                ;; Set allowance
+                (map-set token-allowances { owner: tx-sender, spender: spender, token-id: token-id } { allowance: amount })
+                
+                ;; Emit approval event
+                (print {
+                    action: "approve",
+                    owner: tx-sender,
+                    spender: spender,
+                    token-id: token-id,
+                    amount: amount
+                })
+                
+                (ok true)
+            )
+            ERR-TOKEN-NOT-EXISTS
+        )
+    )
+)
+
+;; Get allowance for spender on specific token
+(define-read-only (get-allowance (owner principal) (spender principal) (token-id uint))
+    (ok (default-to u0 (get allowance (map-get? token-allowances { owner: owner, spender: spender, token-id: token-id }))))
 )
