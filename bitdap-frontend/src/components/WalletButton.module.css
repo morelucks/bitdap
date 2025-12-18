@@ -1,0 +1,46 @@
+.walletContainer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.connectBtn,
+.disconnectBtn {
+  padding: 10px 20px;
+  border-radius: 8px;
+  border: 1px solid #4371ff;
+  background: #4371ff;
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.connectBtn:hover {
+  background: #2d5aff;
+  border-color: #2d5aff;
+}
+
+.disconnectBtn {
+  background: transparent;
+  border-color: #6b7280;
+  color: #e9edf5;
+  padding: 8px 16px;
+  font-size: 14px;
+}
+
+.disconnectBtn:hover {
+  background: #1f2937;
+  border-color: #9ca3af;
+}
+
+.address {
+  padding: 8px 16px;
+  background: #162033;
+  border: 1px solid #23304a;
+  border-radius: 8px;
+  font-family: monospace;
+  font-size: 14px;
+  color: #b6c3d8;
+}
+
