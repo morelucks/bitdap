@@ -68,6 +68,15 @@
 ;; Marketplace pause flag (when true, marketplace operations are disabled)
 (define-data-var marketplace-paused bool false)
 
+;; Counter for unique users who have interacted with the contract
+(define-data-var user-count uint u0)
+
+;; Counter for marketplace listings (placeholder for future marketplace functionality)
+(define-data-var listing-count uint u0)
+
+;; Counter for total transactions (mints, transfers, burns)
+(define-data-var transaction-count uint u0)
+
 ;; data maps
 ;; - Storage for token ownership, metadata, and per-tier supply.
 
