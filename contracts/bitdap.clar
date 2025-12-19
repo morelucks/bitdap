@@ -601,6 +601,47 @@
     )
 )
 
+;; Public: cancel an active marketplace listing
+;; Only the listing owner can cancel their listing
+;; Sets the listing to inactive and decrements listing count
+(define-public (cancel-listing (listing-id uint))
+    (begin
+        (asserts! (not (var-get marketplace-paused)) ERR-PAUSED)
+        (match (validate-listing-owner listing-id tx-sender)
+            listing-data (let (
+                (cancelled-listing {
+                    token-id: (get token-id listing-data),
+                    seller: (get seller listing-data),
+                    price: (get price listing-data),
+                    created-at: (get created-at listing-data),
+                    active: false
+                })
+            )
+                (begin
+                    (asserts! (get active listing-data) ERR-LISTING-NOT-FOUND)
+                    (map-set marketplace-listings { listing-id: listing-id } cancelled-listing)
+                    ;; Decrement listing count
+                    (let ((current-count (var-get listing-count)))
+                        (var-set listing-count (if (> current-count u0)
+                            (- current-count u1)
+                            u0
+                        ))
+                    )
+                    ;; Emit cancellation event
+                    (print (tuple
+                        (event "listing-cancelled")
+                        (listing-id listing-id)
+                        (token-id (get token-id listing-data))
+                        (seller tx-sender)
+                    ))
+                    (ok true)
+                )
+            )
+            error (err error)
+        )
+    )
+)
+
 ;; Batch operations for efficiency
 
 ;; Batch mint multiple passes to different recipients
