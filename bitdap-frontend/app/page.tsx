@@ -4,6 +4,7 @@ import { WalletButton } from "@components/WalletButton";
 import { MintPass } from "@components/MintPass";
 import { PassList } from "@components/PassList";
 import { AdminPanel } from "@components/AdminPanel";
+import { EventFeed } from "@components/EventFeed";
 import { contractsConfig, formatNetworkLabel } from "@config/contracts";
 import styles from "./page.module.css";
 
@@ -55,6 +56,7 @@ export default function Home() {
       </div>
 
       <div className={styles.content}>
+        <EventFeed />
         <MintPass />
         <PassList />
         <AdminPanel />
