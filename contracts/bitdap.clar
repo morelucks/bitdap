@@ -499,6 +499,9 @@
     (ok (var-get contract-owner))
 )
 
+;; User Management Functions
+;; - Functions for querying user registration, listings, and statistics
+
 ;; Read-only: check if a user is registered in the user registry
 ;; Returns true if the user has interacted with the contract (minted, transferred, etc.), false otherwise
 ;; This function enables frontend applications to determine user interaction history
