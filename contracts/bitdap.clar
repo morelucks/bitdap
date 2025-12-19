@@ -543,6 +543,18 @@
     (ok (var-get contract-owner))
 )
 
+;; Marketplace Functions
+;; - Functions for managing marketplace listings
+
+;; Read-only: get full listing information by listing ID
+;; Returns complete listing details including token-id, seller, price, created-at, and active status
+(define-read-only (get-listing (listing-id uint))
+    (match (map-get? marketplace-listings { listing-id: listing-id })
+        listing-data (ok listing-data)
+        ERR-LISTING-NOT-FOUND
+    )
+)
+
 ;; Batch operations for efficiency
 
 ;; Batch mint multiple passes to different recipients
