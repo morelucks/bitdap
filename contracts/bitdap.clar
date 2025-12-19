@@ -1,6 +1,6 @@
 ;; title: Bitdap Pass
-;; version: 0.1.0
-;; summary: Bitdap Pass - tiered membership NFT collection on Stacks.
+;; version: 0.3.0
+;; summary: Bitdap Pass - tiered membership NFT collection with marketplace on Stacks.
 ;; description: >
 ;;   Bitdap Pass is a non-fungible token (NFT) collection that represents
 ;;   access passes to the Bitdap ecosystem. Each pass belongs to a tier
@@ -10,12 +10,15 @@
 ;;   - Collection name: Bitdap Pass
 ;;   - Tiers: Basic, Pro, VIP
 ;;   - 1 owner per token-id, non-fractional NFTs
+;;   - Marketplace functions: get-listing, update-listing-price, cancel-listing
 ;;   - Future milestones will define minting, transfer logic, and metadata
 ;;     for each tier.
 ;;
 ;;   - mint-event: emitted when a pass is minted (token-id, owner, tier)
 ;;   - transfer-event: emitted when ownership changes (token-id, from, to)
 ;;   - burn-event: emitted when a pass is burned (token-id, owner, tier)
+;;   - listing-price-updated: emitted when listing price is changed
+;;   - listing-cancelled: emitted when listing is cancelled
 
 ;; traits
 ;; SIP-009 NFT trait implementation
