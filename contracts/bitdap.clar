@@ -568,10 +568,13 @@
 )
 
 ;; Marketplace Functions
-;; - Functions for managing marketplace listings
+;; - Functions for managing marketplace listings and operations
+;; - Supports listing creation, price updates, cancellation, and queries
+;; - All marketplace operations respect pause status and ownership validation
 
 ;; Read-only: get full listing information by listing ID
 ;; Returns complete listing details including token-id, seller, price, created-at, and active status
+;; Used by marketplace interfaces to display listing information and validate operations
 (define-read-only (get-listing (listing-id uint))
     (match (map-get? marketplace-listings { listing-id: listing-id })
         listing-data (ok listing-data)
@@ -619,6 +622,8 @@
 ;; Public: cancel an active marketplace listing
 ;; Only the listing owner can cancel their listing
 ;; Sets the listing to inactive and decrements listing count
+;; Prevents double-cancellation by checking active status first
+;; Emits cancellation event for marketplace tracking and analytics
 (define-public (cancel-listing (listing-id uint))
     (begin
         (asserts! (not (var-get marketplace-paused)) ERR-PAUSED)
