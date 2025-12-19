@@ -568,7 +568,7 @@
 
 ;; Public: update the price of an existing marketplace listing
 ;; Only the listing owner can update the price
-;; Price must be greater than 0
+;; Price must be greater than 0 and listing must be active
 (define-public (update-listing-price (listing-id uint) (new-price uint))
     (begin
         (asserts! (not (var-get marketplace-paused)) ERR-PAUSED)
@@ -584,6 +584,8 @@
                 })
             )
                 (begin
+                    ;; Ensure listing is active before allowing price updates
+                    (asserts! (get active listing-data) ERR-LISTING-NOT-FOUND)
                     (map-set marketplace-listings { listing-id: listing-id } updated-listing)
                     ;; Emit price update event
                     (print (tuple
