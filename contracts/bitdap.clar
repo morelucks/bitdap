@@ -450,6 +450,17 @@
     )
 )
 
+;; Helper function to validate listing ownership and existence
+(define-private (validate-listing-owner (listing-id uint) (caller principal))
+    (match (map-get? marketplace-listings { listing-id: listing-id })
+        listing-data (if (is-eq (get seller listing-data) caller)
+            (ok listing-data)
+            ERR-NOT-OWNER
+        )
+        ERR-LISTING-NOT-FOUND
+    )
+)
+
 ;; Admin: pause minting/transfers
 (define-public (pause)
     (begin
