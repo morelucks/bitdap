@@ -1,120 +1,169 @@
 # Bitdap Frontend
 
-Full-featured Next.js frontend for interacting with the Bitdap Pass NFT collection on Stacks.
+Next.js frontend for the Bitdap Pass NFT collection with Chainhooks integration.
 
 ## Features
 
-- 🔗 **Wallet Connection**: Connect with Stacks wallet (Hiro Wallet, Xverse, etc.)
-- 🎨 **Mint Passes**: Mint new Bitdap Pass NFTs (Basic, Pro, VIP tiers)
-- 📊 **Collection Stats**: View total supply, tier supplies, and next token ID
-- 🔄 **Transfer Passes**: Transfer your passes to other addresses
-- 🔥 **Burn Passes**: Burn/destroy passes you own
-- ⚙️ **Admin Panel**: Pause/unpause contract and update token URIs (contract owner only)
+- ✅ Wallet connection (Hiro Wallet, Xverse, Leather)
+- ✅ Mint Bitdap Passes
+- ✅ View Pass collection
+- ✅ Admin controls (pause/unpause, set-token-uri)
+- ✅ **Real-time event tracking via Chainhooks**
+- ✅ Event feed showing mints, transfers, and burns
 
 ## Setup
 
-1. **Install dependencies:**
+### 1. Install Dependencies
+
 ```bash
 npm install
 ```
 
-2. **Copy environment template:**
+### 2. Configure Environment Variables
+
+Copy `.env.local.example` to `.env.local`:
+
 ```bash
-cp env.example .env.local
+cp .env.local.example .env.local
 ```
 
-3. **Configure environment variables in `.env.local`:**
+Edit `.env.local` with your contract addresses:
+
 ```env
-NEXT_PUBLIC_STACKS_NETWORK=testnet
-NEXT_PUBLIC_BITDAP_CONTRACT=ST1EQNTKNRGME36P9EEXZCFFNCYBA50VN6SHNZ40.bitdap
-NEXT_PUBLIC_BITDAP_TOKEN_CONTRACT=ST1EQNTKNRGME36P9EEXZCFFNCYBA50VN6SHNZ40.bitdap-token
+NEXT_PUBLIC_STACKS_NETWORK=mainnet
+NEXT_PUBLIC_BITDAP_CONTRACT=SPGDMV1EMAKT9N8NTP9KXM2PC14CDS37HHJSX8XQ.bitdap
+NEXT_PUBLIC_BITDAP_TOKEN_CONTRACT=SPGDMV1EMAKT9N8NTP9KXM2PC14CDS37HHJSX8XQ.bitdap-token
 NEXT_PUBLIC_HIRO_EXPLORER_BASE=https://explorer.hiro.so
 NEXT_PUBLIC_HIRO_API_BASE=https://api.hiro.so
+NEXT_PUBLIC_WEBHOOK_URL=http://localhost:3000/api/webhooks
 ```
 
-4. **Run the development server:**
+### 3. Run Development Server
+
 ```bash
 npm run dev
 ```
 
-5. **Open [http://localhost:3000](http://localhost:3000)** in your browser
+Open [http://localhost:3000](http://localhost:3000)
 
-## Usage
+## Chainhooks Integration
 
-### Connect Wallet
-1. Click "Connect Wallet" in the top right
-2. Select your Stacks wallet (Hiro Wallet, Xverse, etc.)
-3. Approve the connection request
+The frontend includes full Chainhooks integration for real-time event tracking:
 
-### Mint a Pass
-1. Ensure your wallet is connected
-2. Select a tier (Basic, Pro, or VIP)
-3. Optionally add a metadata URI
-4. Click "Mint Pass"
-5. Approve the transaction in your wallet
+### Webhook Endpoint
 
-### Transfer a Pass
-1. Enter the token ID of the pass you want to transfer
-2. Enter the recipient's Stacks address
-3. Click "Transfer"
-4. Approve the transaction in your wallet
+The app exposes a webhook endpoint at `/api/webhooks` that receives events from Hiro Chainhooks.
 
-### Burn a Pass
-1. Enter the token ID of the pass you want to burn
-2. Confirm the action
-3. Click "Burn Pass"
-4. Approve the transaction in your wallet
+### Setting Up Chainhooks
 
-### Admin Functions
-- **Pause/Unpause**: Temporarily disable minting and transfers
-- **Set Token URI**: Update the metadata URI for a specific token
+1. **Register Chainhooks** (see `chainhooks-quickstart.md` in the root directory):
 
-Note: Admin functions are only available to the contract owner.
+```bash
+# From the root directory
+npm run chainhooks:register
+```
+
+2. **Configure Webhook URL**:
+
+   - For local development: Use ngrok or similar to expose your local server:
+     ```bash
+     ngrok http 3000
+     ```
+     Then set `NEXT_PUBLIC_WEBHOOK_URL` to your ngrok URL.
+
+   - For production: Set `NEXT_PUBLIC_WEBHOOK_URL` to your production webhook endpoint.
+
+3. **Update Chainhooks Registration**:
+
+   Edit `chainhooks.ts` in the root directory to use your webhook URL:
+
+   ```typescript
+   const webhookUrl = process.env.WEBHOOK_URL || "https://your-domain.com/api/webhooks";
+   ```
+
+### Event Feed
+
+The `EventFeed` component displays real-time events:
+- ✨ Mint events
+- 🔄 Transfer events  
+- 🔥 Burn events
+
+Events are stored client-side in localStorage and updated via webhooks.
 
 ## Project Structure
 
 ```
 bitdap-frontend/
 ├── app/
-│   ├── layout.tsx          # Root layout with providers
-│   ├── page.tsx             # Main page component
-│   ├── page.module.css      # Page styles
-│   └── globals.css          # Global styles
+│   ├── api/
+│   │   └── webhooks/          # Chainhooks webhook endpoints
+│   ├── layout.tsx
+│   └── page.tsx
 ├── src/
-│   ├── components/          # React components
-│   │   ├── WalletButton.tsx
+│   ├── components/
+│   │   ├── EventFeed.tsx      # Real-time event display
 │   │   ├── MintPass.tsx
 │   │   ├── PassList.tsx
-│   │   └── AdminPanel.tsx
-│   ├── context/             # React contexts
-│   │   └── WalletContext.tsx
-│   ├── hooks/               # Custom hooks
-│   │   ├── useBitdapContract.ts
-│   │   └── useBitdapRead.ts
-│   └── config/              # Configuration
-│       └── contracts.ts
-└── package.json
+│   │   ├── AdminPanel.tsx
+│   │   └── WalletButton.tsx
+│   ├── config/
+│   │   └── contracts.ts       # Contract configuration
+│   ├── context/
+│   │   └── WalletContext.tsx  # Wallet connection state
+│   └── hooks/
+│       ├── useBitdapContract.ts
+│       ├── useBitdapRead.ts
+│       └── useChainhooks.ts    # Chainhooks integration
+└── .env.local                  # Environment variables (gitignored)
 ```
 
-## Technologies
+## Testing
 
-- **Next.js 14**: React framework
-- **@stacks/connect-react**: Stacks wallet integration
-- **@stacks/transactions**: Transaction building and broadcasting
-- **@stacks/network**: Network configuration
-- **TypeScript**: Type safety
-- **CSS Modules**: Scoped styling
+### Test Mint Flow
 
-## Build for Production
+1. Connect wallet
+2. Select tier (1, 2, or 3)
+3. Optionally add metadata URI
+4. Click "Mint Pass"
+5. Approve transaction in wallet
+6. Event should appear in Event Feed
+
+### Test Admin Functions
+
+1. Connect with admin wallet (deployer address)
+2. Use Admin Panel to:
+   - Pause/unpause contract
+   - Set token URI
+3. Verify changes take effect
+
+## Production Deployment
+
+1. Set all environment variables in your hosting platform
+2. Ensure webhook URL is publicly accessible
+3. Register Chainhooks with production webhook URL
+4. Build and deploy:
 
 ```bash
 npm run build
 npm start
 ```
 
-## Notes
+## Troubleshooting
 
-- The frontend uses `@stacks/connect-react` for wallet integration
-- All contract interactions require wallet approval
-- Read-only functions (stats, metadata) don't require transactions
-- Admin functions check contract ownership on-chain
+### Events Not Appearing
+
+- Check that Chainhooks are registered correctly
+- Verify webhook URL is accessible
+- Check browser console for errors
+- Ensure contract addresses are correct
+
+### Wallet Connection Issues
+
+- Ensure you have a Stacks wallet installed (Hiro Wallet, Xverse, or Leather)
+- Check network matches your contract deployment (mainnet/testnet)
+
+### Contract Calls Failing
+
+- Verify contract addresses in `.env.local`
+- Check network matches contract deployment
+- Ensure wallet has sufficient STX for fees
