@@ -417,6 +417,19 @@
     ))
 )
 
+;; Read-only: get next listing ID that will be assigned
+(define-read-only (get-next-listing-id)
+    (ok (var-get next-listing-id))
+)
+
+;; Read-only: check if a listing is active
+(define-read-only (is-listing-active (listing-id uint))
+    (match (map-get? marketplace-listings { listing-id: listing-id })
+        listing-data (ok (get active listing-data))
+        (ok false)
+    )
+)
+
 ;; private functions
 ;; - Internal helpers for validating tiers and managing counters/maps.
 
