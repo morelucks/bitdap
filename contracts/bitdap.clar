@@ -566,6 +566,41 @@
     )
 )
 
+;; Public: update the price of an existing marketplace listing
+;; Only the listing owner can update the price
+;; Price must be greater than 0
+(define-public (update-listing-price (listing-id uint) (new-price uint))
+    (begin
+        (asserts! (not (var-get marketplace-paused)) ERR-PAUSED)
+        (asserts! (> new-price u0) ERR-INVALID-PRICE)
+        (match (validate-listing-owner listing-id tx-sender)
+            listing-data (let (
+                (updated-listing {
+                    token-id: (get token-id listing-data),
+                    seller: (get seller listing-data),
+                    price: new-price,
+                    created-at: (get created-at listing-data),
+                    active: (get active listing-data)
+                })
+            )
+                (begin
+                    (map-set marketplace-listings { listing-id: listing-id } updated-listing)
+                    ;; Emit price update event
+                    (print (tuple
+                        (event "listing-price-updated")
+                        (listing-id listing-id)
+                        (old-price (get price listing-data))
+                        (new-price new-price)
+                        (seller tx-sender)
+                    ))
+                    (ok true)
+                )
+            )
+            error (err error)
+        )
+    )
+)
+
 ;; Batch operations for efficiency
 
 ;; Batch mint multiple passes to different recipients
