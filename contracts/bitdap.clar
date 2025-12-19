@@ -39,6 +39,9 @@
 (define-constant ERR-MAX-TIER-SUPPLY (err u105))
 (define-constant ERR-UNAUTHORIZED (err u106))
 (define-constant ERR-PAUSED (err u107))
+(define-constant ERR-LISTING-NOT-FOUND (err u108))
+(define-constant ERR-INVALID-PRICE (err u109))
+(define-constant ERR-LISTING-EXPIRED (err u110))
 
 ;; Tiers are represented as uints for compact on-chain storage.
 (define-constant TIER-BASIC u1)
@@ -73,8 +76,11 @@
 ;; Counter for unique users who have interacted with the contract
 (define-data-var user-count uint u0)
 
-;; Counter for marketplace listings (placeholder for future marketplace functionality)
+;; Counter for marketplace listings
 (define-data-var listing-count uint u0)
+
+;; Next listing ID to assign
+(define-data-var next-listing-id uint u1)
 
 ;; Counter for total transactions (mints, transfers, burns)
 (define-data-var transaction-count uint u0)
@@ -107,6 +113,18 @@
 (define-map user-registry
     { user: principal }
     { active: bool }
+)
+
+;; listing-id -> listing details
+(define-map marketplace-listings
+    { listing-id: uint }
+    {
+        token-id: uint,
+        seller: principal,
+        price: uint,
+        created-at: uint,
+        active: bool
+    }
 )
 
 ;; public functions
