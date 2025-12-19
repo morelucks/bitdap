@@ -107,6 +107,13 @@
     { active: bool }
 )
 
+;; principal -> list of listing IDs (placeholder for future marketplace functionality)
+;; Currently unused but prepared for future marketplace features
+(define-map user-listings
+    { user: principal }
+    { listing-ids: (list 100 uint) }
+)
+
 ;; public functions
 ;; - Core NFT operations: mint, transfer, burn.
 
