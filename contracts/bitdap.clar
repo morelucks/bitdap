@@ -1,5 +1,5 @@
 ;; title: Bitdap Pass
-;; version: 0.1.0
+;; version: 0.2.0
 ;; summary: Bitdap Pass - tiered membership NFT collection on Stacks.
 ;; description: >
 ;;   Bitdap Pass is a non-fungible token (NFT) collection that represents
@@ -10,6 +10,7 @@
 ;;   - Collection name: Bitdap Pass
 ;;   - Tiers: Basic, Pro, VIP
 ;;   - 1 owner per token-id, non-fractional NFTs
+;;   - User management functions: is-registered, get-user-listings, get-total-users
 ;;   - Future milestones will define minting, transfer logic, and metadata
 ;;     for each tier.
 ;;
