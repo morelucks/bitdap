@@ -21,9 +21,7 @@
 ;;   - listing-cancelled: emitted when listing is cancelled
 
 ;; traits
-;; SIP-009 NFT trait implementation
-(use-trait nft-trait 'SP2PABAF9FTAJYNFZH93XENAJ8FVY99RRM50D2JG9.nft-trait.nft-trait)
-(impl-trait 'SP2PABAF9FTAJYNFZH93XENAJ8FVY99RRM50D2JG9.nft-trait.nft-trait)
+;; - Trait definitions can be added here (e.g., SIP-009) for interface compatibility.
 
 ;; token definitions
 ;; - Bitdap Pass uses uint token-ids (u1, u2, ...) to identify each NFT.
@@ -758,8 +756,8 @@
             (owner-row (map-get? token-owners { token-id: token-id }))
         )
             (if (is-none owner-row)
-                (err ERR-NOT-FOUND)
-                (let ((owner (get owner (unwrap! owner-row ERR-NOT-FOUND))))
+                (err u101)
+                (let ((owner (get owner (unwrap! owner-row (err u101)))))
                     (if (and 
                         (is-eq owner tx-sender)
                         (not (is-eq owner recipient))
@@ -774,7 +772,7 @@
                             ))
                             (ok true)
                         )
-                        (err ERR-NOT-OWNER)
+                        (err u102)
                     )
                 )
             )
