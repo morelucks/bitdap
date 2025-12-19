@@ -490,3 +490,9 @@
 (define-read-only (get-admin)
     (ok (var-get contract-owner))
 )
+
+;; Read-only: check if a user is registered in the user registry
+;; Returns true if the user has interacted with the contract, false otherwise
+(define-read-only (is-registered (user principal))
+    (is-some (map-get? user-registry { user: user }))
+)
