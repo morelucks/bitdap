@@ -512,10 +512,12 @@
 ;; Currently returns empty list as placeholder for future marketplace functionality
 ;; When marketplace features are implemented, this will return actual listing data
 ;; Enables marketplace interfaces to display user-specific activity and portfolio information
+;; Handles edge cases gracefully by returning empty list for users with no listings
 (define-read-only (get-user-listings (user principal))
     (let ((listings-row (map-get? user-listings { user: user })))
         (match listings-row
             listings-data (ok (get listing-ids listings-data))
+            ;; Return empty list for users with no listings (graceful degradation)
             (ok (list))
         )
     )
