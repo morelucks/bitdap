@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useBitdapRead } from "@hooks/useBitdapRead";
 import { useBitdapContract } from "@hooks/useBitdapContract";
 import { useWallet } from "@context/WalletContext";
+import { useChainhooks } from "@hooks/useChainhooks";
 import { contractsConfig } from "@config/contracts";
 import styles from "./PassList.module.css";
 
@@ -17,6 +18,7 @@ export function PassList() {
   const { address, isConnected } = useWallet();
   const { getTotalSupply, getNextTokenId, getTierSupply, isPaused } = useBitdapRead();
   const { transfer, burn, loading } = useBitdapContract();
+  const { addEvent } = useChainhooks();
   const [stats, setStats] = useState<any>(null);
   const [paused, setPaused] = useState<boolean>(false);
   const [transferTokenId, setTransferTokenId] = useState("");
@@ -63,9 +65,23 @@ export function PassList() {
 
     const result = await transfer(Number(transferTokenId), transferRecipient);
     if (result) {
+      const txId = (result as any)?.txId || (result as any)?.txid || "pending";
+      
+      // Add transfer event to chainhooks
+      if (address) {
+        addEvent({
+          event: "transfer-event",
+          tokenId: Number(transferTokenId),
+          from: address,
+          to: transferRecipient,
+          timestamp: new Date().toISOString(),
+          txId: typeof txId === "string" ? txId : undefined,
+        });
+      }
+      
       setTransferTokenId("");
       setTransferRecipient("");
-      alert(`Transfer initiated! Transaction: ${result.txId}`);
+      alert(`Transfer initiated! Transaction: ${txId}`);
     }
   };
 
@@ -81,8 +97,21 @@ export function PassList() {
 
     const result = await burn(Number(burnTokenId));
     if (result) {
+      const txId = (result as any)?.txId || (result as any)?.txid || "pending";
+      
+      // Add burn event to chainhooks
+      if (address) {
+        addEvent({
+          event: "burn-event",
+          tokenId: Number(burnTokenId),
+          owner: address,
+          timestamp: new Date().toISOString(),
+          txId: typeof txId === "string" ? txId : undefined,
+        });
+      }
+      
       setBurnTokenId("");
-      alert(`Burn initiated! Transaction: ${result.txId}`);
+      alert(`Burn initiated! Transaction: ${txId}`);
     }
   };
 
