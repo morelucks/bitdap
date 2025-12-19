@@ -500,13 +500,18 @@
 )
 
 ;; Read-only: check if a user is registered in the user registry
-;; Returns true if the user has interacted with the contract, false otherwise
+;; Returns true if the user has interacted with the contract (minted, transferred, etc.), false otherwise
+;; This function enables frontend applications to determine user interaction history
+;; and eligibility for certain features based on registration status
 (define-read-only (is-registered (user principal))
     (is-some (map-get? user-registry { user: user }))
 )
 
 ;; Read-only: get all marketplace listings for a specific user
-;; Returns empty list for now (placeholder for future marketplace functionality)
+;; Returns a list of listing IDs created by the specified user
+;; Currently returns empty list as placeholder for future marketplace functionality
+;; When marketplace features are implemented, this will return actual listing data
+;; Enables marketplace interfaces to display user-specific activity and portfolio information
 (define-read-only (get-user-listings (user principal))
     (let ((listings-row (map-get? user-listings { user: user })))
         (match listings-row
@@ -517,7 +522,9 @@
 )
 
 ;; Read-only: get total number of users (mirror of get-user-count)
-;; Provides alternative naming for user count access
+;; Returns the same value as get-user-count but with alternative naming
+;; Provides flexibility for system administrators and frontend applications
+;; to access user statistics using preferred function naming conventions
 (define-read-only (get-total-users)
     (ok (var-get user-count))
 )
