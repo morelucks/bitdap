@@ -1,7 +1,17 @@
-
+# Security: Never commit private keys or mnemonics
 **/settings/Mainnet.toml
 **/settings/Testnet.toml
 .env
+.env.local
+.env.*.local
+*.key
+*.pem
+*.p12
+*.pfx
+secrets/
+*.secret
+
+# Cache and logs
 .cache/**
 history.txt
 

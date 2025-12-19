@@ -9,7 +9,8 @@
     "test:report": "vitest run -- --coverage --costs",
     "test:watch": "chokidar \"tests/**/*.ts\" \"contracts/**/*.clar\" -c \"npm run test:report\"",
     "chainhooks:setup": "tsx chainhooks.ts",
-    "chainhooks:register": "tsx chainhooks.ts"
+    "chainhooks:register": "tsx chainhooks.ts",
+    "txs:bitdap:100": "tsx scripts/send-100-txs.ts"
   },
   "author": "",
   "license": "ISC",
