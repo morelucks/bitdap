@@ -504,7 +504,7 @@
 ;; This function enables frontend applications to determine user interaction history
 ;; and eligibility for certain features based on registration status
 (define-read-only (is-registered (user principal))
-    (is-some (map-get? user-registry { user: user }))
+    (ok (is-some (map-get? user-registry { user: user })))
 )
 
 ;; Read-only: get all marketplace listings for a specific user
