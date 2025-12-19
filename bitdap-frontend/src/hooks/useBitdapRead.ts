@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { callReadOnlyFunction, uintCV, principalCV, cvToJSON, ClarityValue } from "@stacks/transactions";
+import { fetchCallReadOnlyFunction, uintCV, principalCV, cvToJSON, ClarityValue } from "@stacks/transactions";
 import { contractsConfig } from "@config/contracts";
 import { useWallet } from "@context/WalletContext";
 
@@ -19,7 +19,7 @@ export function useBitdapRead() {
       setError(null);
 
       try {
-        const result = await callReadOnlyFunction({
+        const result = await fetchCallReadOnlyFunction({
           contractAddress,
           contractName,
           functionName,
@@ -94,4 +94,3 @@ export function useBitdapRead() {
     getOwnedTokens,
   };
 }
-

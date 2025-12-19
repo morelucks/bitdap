@@ -377,6 +377,28 @@
     (ok (var-get transaction-count))
 )
 
+;; Returns the next token-id that will be minted
+(define-read-only (get-next-token-id)
+    (ok (var-get next-token-id))
+)
+
+;; Check if a token exists
+(define-read-only (token-exists (token-id uint))
+    (ok (is-some (map-get? token-owners { token-id: token-id })))
+)
+
+;; Get all tier information at once
+(define-read-only (get-all-tier-info)
+    (ok (tuple
+        (basic-supply (get supply (default-to { supply: u0 } (map-get? tier-supplies { tier: TIER-BASIC }))))
+        (pro-supply (get supply (default-to { supply: u0 } (map-get? tier-supplies { tier: TIER-PRO }))))
+        (vip-supply (get supply (default-to { supply: u0 } (map-get? tier-supplies { tier: TIER-VIP }))))
+        (basic-max MAX-BASIC-SUPPLY)
+        (pro-max MAX-PRO-SUPPLY)
+        (vip-max MAX-VIP-SUPPLY)
+    ))
+)
+
 ;; private functions
 ;; - Internal helpers for validating tiers and managing counters/maps.
 
@@ -572,7 +594,7 @@
                 acc ;; Return unchanged if validation fails
             )
         )
-        error error
+        error (err error)
     )
 )
 
@@ -595,8 +617,9 @@
             (recipient (get recipient item))
             (owner-row (map-get? token-owners { token-id: token-id }))
         )
-            (match owner-row
-                owner-data (let ((owner (get owner owner-data)))
+            (if (is-none owner-row)
+                (err ERR-NOT-FOUND)
+                (let ((owner (get owner (unwrap! owner-row ERR-NOT-FOUND))))
                     (if (and 
                         (is-eq owner tx-sender)
                         (not (is-eq owner recipient))
@@ -611,12 +634,11 @@
                             ))
                             (ok true)
                         )
-                        ERR-NOT-OWNER
+                        (err ERR-NOT-OWNER)
                     )
                 )
-                ERR-NOT-FOUND
             )
         )
-        error error
+        error acc
     )
 )

@@ -52,7 +52,8 @@ export function AdminPanel() {
     if (result) {
       setTokenId("");
       setUri("");
-      alert(`Token URI updated! Transaction: ${result.txId}`);
+      const txId = (result as any)?.txId || (result as any)?.txid || "pending";
+      alert(`Token URI updated! Transaction: ${txId}`);
     }
   };
 

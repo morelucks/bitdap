@@ -5,7 +5,8 @@ authors = []
 telemetry = true
 cache_dir = './.cache'
 requirements = [
-    {contract_id = "SP3FBR2AGK5H9QBDH3EEN6DF8EK8JY7RX8QJ5SVTE.sip-010-trait-ft-standard", remap = "sip-010-trait"}
+    {contract_id = "SP3FBR2AGK5H9QBDH3EEN6DF8EK8JY7RX8QJ5SVTE.sip-010-trait-ft-standard", remap = "sip-010-trait"},
+    {contract_id = "SP2PABAF9FTAJYNFZH93XENAJ8FVY99RRM50D2JG9.nft-trait", remap = "nft-trait"}
 ]
 [contracts.bitdap]
 path = 'contracts/bitdap.clar'
