@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useBitdapContract } from "@hooks/useBitdapContract";
 import { useWallet } from "@context/WalletContext";
+import { useChainhooks } from "@hooks/useChainhooks";
 import styles from "./MintPass.module.css";
 
 const TIERS = [
@@ -12,8 +13,9 @@ const TIERS = [
 ];
 
 export function MintPass() {
-  const { isConnected } = useWallet();
+  const { isConnected, address } = useWallet();
   const { mintPass, loading, error } = useBitdapContract();
+  const { addEvent } = useChainhooks();
   const [tier, setTier] = useState<number>(1);
   const [uri, setUri] = useState("");
   const [success, setSuccess] = useState<string | null>(null);
@@ -27,7 +29,21 @@ export function MintPass() {
     setSuccess(null);
     const result = await mintPass(tier, uri || undefined);
     if (result) {
-      setSuccess(`Pass minted! Transaction: ${result.txId}`);
+      const txId = (result as any)?.txId || (result as any)?.txid || "pending";
+      setSuccess(`Pass minted! Transaction: ${txId}`);
+      
+      // Add event to chainhooks (will be confirmed by webhook later)
+      if (address) {
+        addEvent({
+          event: "mint-event",
+          tokenId: 0, // Will be updated by webhook
+          owner: address,
+          tier,
+          timestamp: new Date().toISOString(),
+          txId: typeof txId === "string" ? txId : undefined,
+        });
+      }
+      
       setUri("");
     }
   };
