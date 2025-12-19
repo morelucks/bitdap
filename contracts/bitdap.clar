@@ -503,3 +503,14 @@
 (define-read-only (is-registered (user principal))
     (is-some (map-get? user-registry { user: user }))
 )
+
+;; Read-only: get all marketplace listings for a specific user
+;; Returns empty list for now (placeholder for future marketplace functionality)
+(define-read-only (get-user-listings (user principal))
+    (let ((listings-row (map-get? user-listings { user: user })))
+        (match listings-row
+            listings-data (ok (get listing-ids listings-data))
+            (ok (list))
+        )
+    )
+)
