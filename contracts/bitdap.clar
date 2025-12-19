@@ -514,3 +514,9 @@
         )
     )
 )
+
+;; Read-only: get total number of users (mirror of get-user-count)
+;; Provides alternative naming for user count access
+(define-read-only (get-total-users)
+    (ok (var-get user-count))
+)
