@@ -1,12 +1,6 @@
 # Bitdap Frontend Setup Guide
 
-## Prerequisites
-
-- Node.js >= 18.17.0
-- npm or yarn
-- Hiro Wallet browser extension (for wallet connection)
-
-## Installation
+## Quick Start
 
 ### 1. Install Dependencies
 
@@ -15,234 +9,160 @@ cd bitdap-frontend
 npm install
 ```
 
-### 2. Environment Configuration
+### 2. Configure Environment
 
-Create `.env.local` file in the `bitdap-frontend` directory:
+Create `.env.local` file:
 
 ```bash
-cp .env.example .env.local
+cp .env.local.example .env.local
 ```
 
-Edit `.env.local` with your configuration:
+Edit `.env.local` with your contract addresses:
 
 ```env
-# Network: mainnet or testnet
-NEXT_PUBLIC_STACKS_NETWORK=testnet
+# Network (mainnet or testnet)
+NEXT_PUBLIC_STACKS_NETWORK=mainnet
 
-# Contract addresses (update with deployed addresses)
-NEXT_PUBLIC_BITDAP_CONTRACT=ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.bitdap
-NEXT_PUBLIC_BITDAP_TOKEN_CONTRACT=ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.bitdap-token
+# Contract Addresses (from your deployment)
+NEXT_PUBLIC_BITDAP_CONTRACT=SPGDMV1EMAKT9N8NTP9KXM2PC14CDS37HHJSX8XQ.bitdap
+NEXT_PUBLIC_BITDAP_TOKEN_CONTRACT=SPGDMV1EMAKT9N8NTP9KXM2PC14CDS37HHJSX8XQ.bitdap-token
 
-# Hiro API endpoints
+# API URLs (usually don't need to change)
 NEXT_PUBLIC_HIRO_EXPLORER_BASE=https://explorer.hiro.so
-NEXT_PUBLIC_HIRO_API_BASE=https://api.testnet.hiro.so
+NEXT_PUBLIC_HIRO_API_BASE=https://api.hiro.so
+
+# Webhook URL (for Chainhooks)
+# For local dev, use ngrok: ngrok http 3000
+NEXT_PUBLIC_WEBHOOK_URL=http://localhost:3000/api/webhooks
 ```
 
-### 3. Install Hiro Wallet
-
-1. Visit https://www.hiro.so/wallet
-2. Download the browser extension for your browser
-3. Install the extension
-4. Create a new wallet or import existing one
-5. Save your seed phrase securely
-
-## Development
-
-### Start Development Server
+### 3. Run Development Server
 
 ```bash
 npm run dev
 ```
 
-The application will be available at `http://localhost:3000`
+Open [http://localhost:3000](http://localhost:3000)
 
-### Build for Production
+## Testing End-to-End
 
-```bash
-npm run build
-npm start
-```
+### Test 1: Wallet Connection
 
-### Type Checking
+1. Click "Connect Wallet"
+2. Select your wallet (Hiro Wallet, Xverse, or Leather)
+3. Approve connection
+4. Verify your address appears
 
-```bash
-npm run typecheck
-```
+### Test 2: Mint a Pass
 
-### Linting
+1. Ensure wallet is connected
+2. Select a tier (1=Basic, 2=Pro, 3=VIP)
+3. Optionally add a metadata URI
+4. Click "Mint Pass"
+5. Approve transaction in wallet
+6. Check Event Feed - should show mint event
+7. Check Pass Statistics - total supply should increase
 
-```bash
-npm run lint
-```
+### Test 3: View Collection Stats
 
-## Features
+1. After minting, check "Collection Statistics"
+2. Verify:
+   - Total Supply increased
+   - Tier supply for your tier increased
+   - Next Token ID is correct
 
-### Wallet Connection
-- Click "Connect Wallet" button
-- Approve connection in Hiro Wallet popup
-- Your address and network will be displayed
+### Test 4: Transfer Pass
 
-### Network Switching
-- Use the network selector dropdown
-- Choose between Testnet and Mainnet
-- Wallet will automatically disconnect when switching networks
+1. Enter a token ID you own
+2. Enter recipient address (SP...)
+3. Click "Transfer"
+4. Approve transaction
+5. Check Event Feed - should show transfer event
 
-### Wallet Status
-- Connected address is displayed (truncated)
-- Current network is shown
-- Connection status indicator
+### Test 5: Admin Functions (if you're deployer)
 
-## Project Structure
+1. Connect with deployer wallet
+2. Use Admin Panel:
+   - Click "Pause" - verify contract pauses
+   - Try to mint - should fail
+   - Click "Unpause" - verify contract unpauses
+   - Try to mint - should succeed
+   - Set token URI for a token ID
+   - Verify URI is updated
 
-```
-bitdap-frontend/
-├── app/
-│   ├── layout.tsx          # Root layout with WalletProvider
-│   ├── page.tsx            # Home page with WalletConnect
-│   └── globals.css         # Global styles
-├── src/
-│   ├── components/
-│   │   ├── WalletConnect.tsx       # Main wallet connection component
-│   │   ├── WalletConnect.module.css
-│   │   ├── WalletStatus.tsx        # Wallet status display
-│   │   └── WalletStatus.module.css
-│   ├── context/
-│   │   └── WalletContext.tsx       # Wallet state context
-│   ├── hooks/
-│   │   ├── useStacksNetwork.ts     # Network hook
-│   │   └── useContractRead.ts      # Contract read hook
-│   └── config/
-│       └── contracts.ts            # Contract configuration
-├── package.json
-├── tsconfig.json
-├── next.config.mjs
-└── SETUP.md                        # This file
-```
+### Test 6: Chainhooks Integration
 
-## Usage Examples
+1. **Set up webhook endpoint** (for local dev):
+   ```bash
+   # In another terminal
+   ngrok http 3000
+   # Copy the https URL
+   ```
 
-### Using Wallet Context
+2. **Update webhook URL** in `.env.local`:
+   ```env
+   NEXT_PUBLIC_WEBHOOK_URL=https://your-ngrok-url.ngrok.io/api/webhooks
+   ```
 
-```tsx
-import { useWallet } from '@/context/WalletContext';
+3. **Register Chainhooks** (from root directory):
+   ```bash
+   cd ..
+   npm run chainhooks:register
+   ```
 
-export function MyComponent() {
-  const { address, network, isConnected, connect, disconnect } = useWallet();
-
-  return (
-    <div>
-      {isConnected ? (
-        <>
-          <p>Address: {address}</p>
-          <p>Network: {network}</p>
-          <button onClick={disconnect}>Disconnect</button>
-        </>
-      ) : (
-        <button onClick={connect}>Connect Wallet</button>
-      )}
-    </div>
-  );
-}
-```
-
-### Reading Contract State
-
-```tsx
-import { useContractRead } from '@/hooks/useContractRead';
-import { Cl } from '@stacks/transactions';
-
-export function GetCounters() {
-  const { data, isLoading, execute } = useContractRead({
-    contractAddress: process.env.NEXT_PUBLIC_BITDAP_CONTRACT!,
-    contractName: 'bitdap',
-    functionName: 'get-counters',
-    functionArgs: [],
-  });
-
-  return (
-    <div>
-      <button onClick={execute} disabled={isLoading}>
-        {isLoading ? 'Loading...' : 'Get Counters'}
-      </button>
-      {data && <pre>{JSON.stringify(data, null, 2)}</pre>}
-    </div>
-  );
-}
-```
+4. **Test webhook**:
+   - Mint a new pass
+   - Check Event Feed - event should appear automatically
+   - Check browser console for webhook calls
 
 ## Troubleshooting
 
-### Wallet Connection Issues
+### Wallet Won't Connect
 
-**Problem**: Wallet connection button doesn't work
-- **Solution**: Ensure Hiro Wallet extension is installed and enabled
-- **Solution**: Check browser console for error messages
-- **Solution**: Try refreshing the page
+- Ensure you have a Stacks wallet installed
+- Check browser console for errors
+- Try refreshing the page
+- Clear browser cache
 
-**Problem**: Wrong network displayed
-- **Solution**: Verify `NEXT_PUBLIC_STACKS_NETWORK` environment variable
-- **Solution**: Check Hiro Wallet is set to correct network
-- **Solution**: Try switching networks in the dropdown
+### Contract Calls Fail
 
-**Problem**: Address not persisting after refresh
-- **Solution**: Check browser localStorage is enabled
-- **Solution**: Verify no browser extensions blocking storage
-- **Solution**: Check browser privacy settings
+- Verify contract addresses in `.env.local` are correct
+- Check network matches (mainnet vs testnet)
+- Ensure wallet has sufficient STX for fees
+- Check contract is not paused (if you're not admin)
 
-### Build Issues
+### Events Not Appearing
 
-**Problem**: TypeScript errors
-```bash
-npm run typecheck
-```
+- Check Chainhooks are registered correctly
+- Verify webhook URL is accessible
+- Check browser console for errors
+- Events are stored in localStorage - check DevTools
 
-**Problem**: Module not found errors
-```bash
-rm -rf node_modules package-lock.json
-npm install
-```
+### Build Errors
 
-## Testing
+- Run `npm install` again
+- Delete `node_modules` and `.next` folders
+- Run `npm install` and `npm run dev`
 
-### Manual Testing Checklist
+## Production Deployment
 
-- [ ] Wallet connects successfully
-- [ ] Address displays correctly
-- [ ] Network selector works
-- [ ] Can switch between mainnet/testnet
-- [ ] Wallet disconnects properly
-- [ ] State persists after page refresh
-- [ ] Responsive on mobile devices
-- [ ] No console errors
+1. Set all environment variables in your hosting platform
+2. Build the app:
+   ```bash
+   npm run build
+   ```
 
-## Deployment
-
-### Vercel (Recommended)
-
-1. Push code to GitHub
-2. Connect repository to Vercel
-3. Set environment variables in Vercel dashboard
-4. Deploy
-
-### Other Platforms
-
-1. Build the project: `npm run build`
-2. Deploy the `.next` directory
-3. Set environment variables on the platform
-4. Configure Node.js runtime
-
-## Support
-
-For issues or questions:
-1. Check the troubleshooting section
-2. Review the WALLET_CONNECT_FEATURE.md documentation
-3. Check browser console for error messages
-4. Verify environment variables are set correctly
+3. Ensure webhook URL is publicly accessible
+4. Register Chainhooks with production webhook URL
+5. Deploy and start:
+   ```bash
+   npm start
+   ```
 
 ## Next Steps
 
-- Implement contract interaction functions
-- Add transaction signing
-- Create NFT minting interface
-- Add token transfer functionality
-- Implement marketplace features
+- [ ] Set up production webhook endpoint
+- [ ] Register Chainhooks for production
+- [ ] Add database for event storage (optional)
+- [ ] Add user authentication (optional)
+- [ ] Add marketplace features (optional)
