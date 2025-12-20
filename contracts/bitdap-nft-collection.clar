@@ -102,3 +102,64 @@
     { token-id: uint }
     { exists: bool }
 )
+
+;; Private Functions
+
+;; Check if caller is contract owner
+(define-private (is-owner (caller principal))
+    (is-eq caller (var-get contract-owner))
+)
+
+;; Get mint count for address (returns 0 if not found)
+(define-private (get-mint-count (address principal))
+    (default-to u0 (get count (map-get? address-mint-count { address: address })))
+)
+
+;; Increment mint count for address
+(define-private (increment-mint-count (address principal))
+    (let ((current-count (get-mint-count address)))
+        (map-set address-mint-count { address: address } { count: (+ current-count u1) })
+    )
+)
+
+;; Public Functions
+
+;; Mint a new NFT to the specified recipient
+(define-public (mint (recipient principal) (uri (optional (string-utf8 256))))
+    (let (
+        (token-id (var-get next-token-id))
+        (current-supply (var-get total-supply))
+        (max-supply-limit (var-get max-supply))
+        (recipient-mint-count (get-mint-count recipient))
+        (per-address-limit-value (var-get per-address-limit))
+        (mint-price-value (var-get mint-price))
+    )
+        ;; Validate contract state
+        (asserts! (not (var-get contract-paused)) ERR-CONTRACT-PAUSED)
+        (asserts! (var-get minting-enabled) ERR-CONTRACT-PAUSED)
+        
+        ;; Validate supply limits
+        (asserts! (< current-supply max-supply-limit) ERR-MAX-SUPPLY-REACHED)
+        
+        ;; Validate per-address minting limit
+        (asserts! (< recipient-mint-count per-address-limit-value) ERR-MINT-LIMIT-EXCEEDED)
+        
+        ;; Validate recipient
+        (asserts! (not (is-eq recipient (as-contract tx-sender))) ERR-INVALID-RECIPIENT)
+        
+        ;; TODO: Add payment validation when STX transfer is implemented
+        
+        ;; Update token ownership and metadata
+        (map-set token-owners { token-id: token-id } { owner: recipient })
+        (map-set token-metadata { token-id: token-id } { uri: uri })
+        (map-set token-exists { token-id: token-id } { exists: true })
+        
+        ;; Update counters
+        (var-set next-token-id (+ token-id u1))
+        (var-set total-supply (+ current-supply u1))
+        (increment-mint-count recipient)
+        
+        ;; Return token ID
+        (ok token-id)
+    )
+)
