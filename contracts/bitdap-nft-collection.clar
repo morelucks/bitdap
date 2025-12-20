@@ -68,6 +68,11 @@
 ;; Administrative variables
 (define-data-var contract-paused bool false)
 
+;; Royalty system
+(define-data-var royalty-percent uint u0) ;; Royalty percentage in basis points (0-1000 = 0-10%)
+(define-data-var royalty-recipient principal tx-sender)
+(define-data-var total-royalties-collected uint u0)
+
 ;; Data Maps
 
 ;; Token ownership tracking
