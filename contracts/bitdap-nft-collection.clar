@@ -477,3 +477,28 @@
         owner: (var-get contract-owner)
     })
 )
+;; Transfer contract ownership (owner only)
+(define-public (transfer-ownership (new-owner principal))
+    (begin
+        (asserts! (is-owner tx-sender) ERR-UNAUTHORIZED)
+        (asserts! (not (is-eq new-owner tx-sender)) ERR-SELF-TRANSFER)
+        
+        (let ((old-owner (var-get contract-owner)))
+            (var-set contract-owner new-owner)
+            
+            (print {
+                event: "ownership-transferred",
+                old-owner: old-owner,
+                new-owner: new-owner,
+                timestamp: block-height
+            })
+            
+            (ok true)
+        )
+    )
+)
+
+;; Get current contract owner
+(define-read-only (get-contract-owner)
+    (ok (var-get contract-owner))
+)
