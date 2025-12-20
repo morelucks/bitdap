@@ -173,3 +173,41 @@
         (ok token-id)
     )
 )
+
+;; Transfer NFT from sender to recipient
+(define-public (transfer (token-id uint) (sender principal) (recipient principal))
+    (let (
+        (owner-data (map-get? token-owners { token-id: token-id }))
+    )
+        ;; Validate contract state
+        (asserts! (not (var-get contract-paused)) ERR-CONTRACT-PAUSED)
+        
+        ;; Validate token exists
+        (asserts! (is-some owner-data) ERR-NOT-FOUND)
+        
+        (let (
+            (current-owner (get owner (unwrap! owner-data ERR-NOT-FOUND)))
+        )
+            ;; Validate ownership
+            (asserts! (is-eq current-owner sender) ERR-UNAUTHORIZED)
+            (asserts! (is-eq sender tx-sender) ERR-UNAUTHORIZED)
+            
+            ;; Prevent self-transfer
+            (asserts! (not (is-eq sender recipient)) ERR-SELF-TRANSFER)
+            
+            ;; Update ownership
+            (map-set token-owners { token-id: token-id } { owner: recipient })
+            
+            ;; Emit transfer event
+            (print {
+                event: "transfer",
+                token-id: token-id,
+                sender: sender,
+                recipient: recipient,
+                timestamp: block-height
+            })
+            
+            (ok true)
+        )
+    )
+)
