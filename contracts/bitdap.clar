@@ -1,6 +1,6 @@
 ;; title: Bitdap Pass
-;; version: 0.1.0
-;; summary: Bitdap Pass - tiered membership NFT collection on Stacks.
+;; version: 0.3.0
+;; summary: Bitdap Pass - tiered membership NFT collection with marketplace on Stacks.
 ;; description: >
 ;;   Bitdap Pass is a non-fungible token (NFT) collection that represents
 ;;   access passes to the Bitdap ecosystem. Each pass belongs to a tier
@@ -10,12 +10,15 @@
 ;;   - Collection name: Bitdap Pass
 ;;   - Tiers: Basic, Pro, VIP
 ;;   - 1 owner per token-id, non-fractional NFTs
+;;   - Marketplace functions: get-listing, update-listing-price, cancel-listing
 ;;   - Future milestones will define minting, transfer logic, and metadata
 ;;     for each tier.
 ;;
 ;;   - mint-event: emitted when a pass is minted (token-id, owner, tier)
 ;;   - transfer-event: emitted when ownership changes (token-id, from, to)
 ;;   - burn-event: emitted when a pass is burned (token-id, owner, tier)
+;;   - listing-price-updated: emitted when listing price is changed
+;;   - listing-cancelled: emitted when listing is cancelled
 
 ;; traits
 ;; - Trait definitions can be added here (e.g., SIP-009) for interface compatibility.
@@ -37,6 +40,9 @@
 (define-constant ERR-MAX-TIER-SUPPLY (err u105))
 (define-constant ERR-UNAUTHORIZED (err u106))
 (define-constant ERR-PAUSED (err u107))
+(define-constant ERR-LISTING-NOT-FOUND (err u108))
+(define-constant ERR-INVALID-PRICE (err u109))
+(define-constant ERR-LISTING-EXPIRED (err u110))
 
 ;; Tiers are represented as uints for compact on-chain storage.
 (define-constant TIER-BASIC u1)
@@ -68,6 +74,18 @@
 ;; Marketplace pause flag (when true, marketplace operations are disabled)
 (define-data-var marketplace-paused bool false)
 
+;; Counter for unique users who have interacted with the contract
+(define-data-var user-count uint u0)
+
+;; Counter for marketplace listings
+(define-data-var listing-count uint u0)
+
+;; Next listing ID to assign
+(define-data-var next-listing-id uint u1)
+
+;; Counter for total transactions (mints, transfers, burns)
+(define-data-var transaction-count uint u0)
+
 ;; data maps
 ;; - Storage for token ownership, metadata, and per-tier supply.
 
@@ -96,6 +114,18 @@
 (define-map user-registry
     { user: principal }
     { active: bool }
+)
+
+;; listing-id -> listing details
+(define-map marketplace-listings
+    { listing-id: uint }
+    {
+        token-id: uint,
+        seller: principal,
+        price: uint,
+        created-at: uint,
+        active: bool
+    }
 )
 
 ;; public functions
@@ -302,6 +332,16 @@
     )
 )
 
+;; SIP-009: transfer function with memo support
+(define-public (transfer-memo (token-id uint) (sender principal) (recipient principal) (memo (buff 34)))
+    (begin
+        (asserts! (is-eq sender tx-sender) ERR-NOT-OWNER)
+        (try! (transfer token-id recipient))
+        (print memo)
+        (ok true)
+    )
+)
+
 ;; Returns the full metadata record for a given token-id.
 (define-read-only (get-token-metadata (token-id uint))
     (match (map-get? token-metadata { token-id: token-id })
@@ -356,6 +396,41 @@
     (ok (var-get transaction-count))
 )
 
+;; Returns the next token-id that will be minted
+(define-read-only (get-next-token-id)
+    (ok (var-get next-token-id))
+)
+
+;; Check if a token exists
+(define-read-only (token-exists (token-id uint))
+    (ok (is-some (map-get? token-owners { token-id: token-id })))
+)
+
+;; Get all tier information at once
+(define-read-only (get-all-tier-info)
+    (ok (tuple
+        (basic-supply (get supply (default-to { supply: u0 } (map-get? tier-supplies { tier: TIER-BASIC }))))
+        (pro-supply (get supply (default-to { supply: u0 } (map-get? tier-supplies { tier: TIER-PRO }))))
+        (vip-supply (get supply (default-to { supply: u0 } (map-get? tier-supplies { tier: TIER-VIP }))))
+        (basic-max MAX-BASIC-SUPPLY)
+        (pro-max MAX-PRO-SUPPLY)
+        (vip-max MAX-VIP-SUPPLY)
+    ))
+)
+
+;; Read-only: get next listing ID that will be assigned
+(define-read-only (get-next-listing-id)
+    (ok (var-get next-listing-id))
+)
+
+;; Read-only: check if a listing is active
+(define-read-only (is-listing-active (listing-id uint))
+    (match (map-get? marketplace-listings { listing-id: listing-id })
+        listing-data (ok (get active listing-data))
+        (ok false)
+    )
+)
+
 ;; private functions
 ;; - Internal helpers for validating tiers and managing counters/maps.
 
@@ -386,6 +461,17 @@
                 false
             )
         )
+    )
+)
+
+;; Helper function to validate listing ownership and existence
+(define-private (validate-listing-owner (listing-id uint) (caller principal))
+    (match (map-get? marketplace-listings { listing-id: listing-id })
+        listing-data (if (is-eq (get seller listing-data) caller)
+            (ok listing-data)
+            ERR-NOT-OWNER
+        )
+        ERR-LISTING-NOT-FOUND
     )
 )
 
@@ -480,4 +566,217 @@
 ;; Read-only: get current admin
 (define-read-only (get-admin)
     (ok (var-get contract-owner))
+)
+
+;; Marketplace Functions
+;; - Functions for managing marketplace listings and operations
+;; - Supports listing creation, price updates, cancellation, and queries
+;; - All marketplace operations respect pause status and ownership validation
+
+;; Read-only: get full listing information by listing ID
+;; Returns complete listing details including token-id, seller, price, created-at, and active status
+;; Used by marketplace interfaces to display listing information and validate operations
+(define-read-only (get-listing (listing-id uint))
+    (match (map-get? marketplace-listings { listing-id: listing-id })
+        listing-data (ok listing-data)
+        ERR-LISTING-NOT-FOUND
+    )
+)
+
+;; Public: update the price of an existing marketplace listing
+;; Only the listing owner can update the price
+;; Price must be greater than 0 and listing must be active
+(define-public (update-listing-price (listing-id uint) (new-price uint))
+    (begin
+        (asserts! (not (var-get marketplace-paused)) ERR-PAUSED)
+        (asserts! (> new-price u0) ERR-INVALID-PRICE)
+        (match (validate-listing-owner listing-id tx-sender)
+            listing-data (let (
+                (updated-listing {
+                    token-id: (get token-id listing-data),
+                    seller: (get seller listing-data),
+                    price: new-price,
+                    created-at: (get created-at listing-data),
+                    active: (get active listing-data)
+                })
+            )
+                (begin
+                    ;; Ensure listing is active before allowing price updates
+                    (asserts! (get active listing-data) ERR-LISTING-NOT-FOUND)
+                    (map-set marketplace-listings { listing-id: listing-id } updated-listing)
+                    ;; Emit price update event
+                    (print (tuple
+                        (event "listing-price-updated")
+                        (listing-id listing-id)
+                        (old-price (get price listing-data))
+                        (new-price new-price)
+                        (seller tx-sender)
+                    ))
+                    (ok true)
+                )
+            )
+            error (err error)
+        )
+    )
+)
+
+;; Public: cancel an active marketplace listing
+;; Only the listing owner can cancel their listing
+;; Sets the listing to inactive and decrements listing count
+;; Prevents double-cancellation by checking active status first
+;; Emits cancellation event for marketplace tracking and analytics
+(define-public (cancel-listing (listing-id uint))
+    (begin
+        (asserts! (not (var-get marketplace-paused)) ERR-PAUSED)
+        (match (validate-listing-owner listing-id tx-sender)
+            listing-data (let (
+                (cancelled-listing {
+                    token-id: (get token-id listing-data),
+                    seller: (get seller listing-data),
+                    price: (get price listing-data),
+                    created-at: (get created-at listing-data),
+                    active: false
+                })
+            )
+                (begin
+                    (asserts! (get active listing-data) ERR-LISTING-NOT-FOUND)
+                    (map-set marketplace-listings { listing-id: listing-id } cancelled-listing)
+                    ;; Decrement listing count
+                    (let ((current-count (var-get listing-count)))
+                        (var-set listing-count (if (> current-count u0)
+                            (- current-count u1)
+                            u0
+                        ))
+                    )
+                    ;; Emit cancellation event
+                    (print (tuple
+                        (event "listing-cancelled")
+                        (listing-id listing-id)
+                        (token-id (get token-id listing-data))
+                        (seller tx-sender)
+                    ))
+                    (ok true)
+                )
+            )
+            error (err error)
+        )
+    )
+)
+
+;; Batch operations for efficiency
+
+;; Batch mint multiple passes to different recipients
+(define-public (batch-mint (recipients (list 10 { recipient: principal, tier: uint, uri: (optional (string-utf8 256)) })))
+    (begin
+        (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-UNAUTHORIZED)
+        (asserts! (not (var-get paused)) ERR-PAUSED)
+        (fold batch-mint-helper recipients (ok (list)))
+    )
+)
+
+;; Helper function for batch minting
+(define-private (batch-mint-helper 
+    (item { recipient: principal, tier: uint, uri: (optional (string-utf8 256)) })
+    (acc (response (list 10 uint) uint))
+)
+    (match acc
+        success-list (let (
+            (current-total (var-get total-supply))
+            (new-total (+ current-total u1))
+            (tier (get tier item))
+            (recipient (get recipient item))
+            (uri (get uri item))
+        )
+            (if (and 
+                (is-valid-tier tier)
+                (<= new-total MAX-SUPPLY)
+                (not (is-tier-over-max? tier (+ (get supply (default-to { supply: u0 } (map-get? tier-supplies { tier: tier }))) u1)))
+            )
+                (let (
+                    (token-id (var-get next-token-id))
+                    (tier-row (default-to { supply: u0 } (map-get? tier-supplies { tier: tier })))
+                    (tier-supply (get supply tier-row))
+                    (new-tier-supply (+ tier-supply u1))
+                )
+                    (begin
+                        ;; Write ownership and metadata
+                        (map-set token-owners { token-id: token-id } { owner: recipient })
+                        (map-set token-metadata { token-id: token-id } {
+                            tier: tier,
+                            uri: uri,
+                        })
+                        ;; Update counters
+                        (map-set tier-supplies { tier: tier } { supply: new-tier-supply })
+                        (var-set total-supply new-total)
+                        (var-set next-token-id (+ token-id u1))
+                        ;; Track user if new
+                        (if (is-none (map-get? user-registry { user: recipient }))
+                            (begin
+                                (map-set user-registry { user: recipient } { active: true })
+                                (var-set user-count (+ (var-get user-count) u1))
+                            )
+                            true
+                        )
+                        ;; Increment transaction count
+                        (var-set transaction-count (+ (var-get transaction-count) u1))
+                        ;; Emit mint event
+                        (print (tuple
+                            (event "batch-mint-event")
+                            (token-id token-id)
+                            (owner recipient)
+                            (tier tier)
+                        ))
+                        (ok (unwrap-panic (as-max-len? (append success-list token-id) u10)))
+                    )
+                )
+                acc ;; Return unchanged if validation fails
+            )
+        )
+        error (err error)
+    )
+)
+
+;; Batch transfer multiple tokens (owner must be tx-sender for all)
+(define-public (batch-transfer (transfers (list 10 { token-id: uint, recipient: principal })))
+    (begin
+        (asserts! (not (var-get paused)) ERR-PAUSED)
+        (fold batch-transfer-helper transfers (ok true))
+    )
+)
+
+;; Helper function for batch transfers
+(define-private (batch-transfer-helper 
+    (item { token-id: uint, recipient: principal })
+    (acc (response bool uint))
+)
+    (match acc
+        success (let (
+            (token-id (get token-id item))
+            (recipient (get recipient item))
+            (owner-row (map-get? token-owners { token-id: token-id }))
+        )
+            (if (is-none owner-row)
+                (err u101)
+                (let ((owner (get owner (unwrap! owner-row (err u101)))))
+                    (if (and 
+                        (is-eq owner tx-sender)
+                        (not (is-eq owner recipient))
+                    )
+                        (begin
+                            (map-set token-owners { token-id: token-id } { owner: recipient })
+                            (print (tuple
+                                (event "batch-transfer-event")
+                                (token-id token-id)
+                                (from owner)
+                                (to recipient)
+                            ))
+                            (ok true)
+                        )
+                        (err u102)
+                    )
+                )
+            )
+        )
+        error acc
+    )
 )

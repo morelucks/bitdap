@@ -10,15 +10,15 @@ plan:
       transactions:
         - contract-publish:
             contract-name: bitdap
-            expected-sender: SP1EQNTKNRGME36P9EEXZCFFNCYBA50VN51676JB
-            cost: 119680
+            expected-sender: SPGDMV1EMAKT9N8NTP9KXM2PC14CDS37HHJSX8XQ
+            cost: 230980
             path: contracts/bitdap.clar
             anchor-block-only: true
             clarity-version: 4
         - contract-publish:
             contract-name: bitdap-token
-            expected-sender: SP1EQNTKNRGME36P9EEXZCFFNCYBA50VN51676JB
-            cost: 92770
+            expected-sender: SPGDMV1EMAKT9N8NTP9KXM2PC14CDS37HHJSX8XQ
+            cost: 112040
             path: contracts/bitdap-token.clar
             anchor-block-only: true
             clarity-version: 4

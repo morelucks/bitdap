@@ -8,11 +8,29 @@ plan:
   batches:
     - id: 0
       transactions:
+        - requirement-publish:
+            contract-id: SP3FBR2AGK5H9QBDH3EEN6DF8EK8JY7RX8QJ5SVTE.sip-010-trait-ft-standard
+            remap-sender: ST2QMSZK6NQJKZPYV2MTBV5DPTZNXXWMKRH3TJGDC
+            remap-principals:
+              SP3FBR2AGK5H9QBDH3EEN6DF8EK8JY7RX8QJ5SVTE: ST2QMSZK6NQJKZPYV2MTBV5DPTZNXXWMKRH3TJGDC
+            cost: 8400
+            path: "./.cache/requirements/SP3FBR2AGK5H9QBDH3EEN6DF8EK8JY7RX8QJ5SVTE.sip-010-trait-ft-standard.clar"
+            clarity-version: 1
+      epoch: "2.0"
+    - id: 1
+      transactions:
         - contract-publish:
             contract-name: bitdap
-            expected-sender: ST1EQNTKNRGME36P9EEXZCFFNCYBA50VN6SHNZ40
-            cost: 91350
+            expected-sender: ST2QMSZK6NQJKZPYV2MTBV5DPTZNXXWMKRH3TJGDC
+            cost: 104936875
             path: contracts/bitdap.clar
+            anchor-block-only: true
+            clarity-version: 4
+        - contract-publish:
+            contract-name: bitdap-token
+            expected-sender: ST2QMSZK6NQJKZPYV2MTBV5DPTZNXXWMKRH3TJGDC
+            cost: 104580712
+            path: contracts/bitdap-token.clar
             anchor-block-only: true
             clarity-version: 4
       epoch: "3.3"

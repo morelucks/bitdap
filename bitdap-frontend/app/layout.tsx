@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { WalletProvider } from "@context/WalletContext";
 
 export const metadata: Metadata = {
-  title: "Bitdap Frontend",
-  description: "Minimal scaffold for Bitdap contracts (bitdap, bitdap-token)"
+  title: "Bitdap - NFT Pass Collection",
+  description: "Bitdap Pass - tiered membership NFT collection on Stacks"
 };
 
 export default function RootLayout({
@@ -13,7 +14,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <WalletProvider>{children}</WalletProvider>
+      </body>
     </html>
   );
 }
