@@ -567,3 +567,62 @@
         (ok true)
     )
 )
+;; Batch Operations
+
+;; Batch mint multiple NFTs (owner only for efficiency)
+(define-public (batch-mint (recipients (list 10 { recipient: principal, uri: (optional (string-utf8 256)) })))
+    (begin
+        (asserts! (is-owner tx-sender) ERR-UNAUTHORIZED)
+        (asserts! (not (var-get contract-paused)) ERR-CONTRACT-PAUSED)
+        (asserts! (var-get minting-enabled) ERR-CONTRACT-PAUSED)
+        
+        (fold batch-mint-helper recipients (ok (list)))
+    )
+)
+
+;; Helper function for batch minting
+(define-private (batch-mint-helper 
+    (item { recipient: principal, uri: (optional (string-utf8 256)) })
+    (acc (response (list 10 uint) uint))
+)
+    (match acc
+        success-list (let (
+            (token-id (var-get next-token-id))
+            (current-supply (var-get total-supply))
+            (max-supply-limit (var-get max-supply))
+            (recipient (get recipient item))
+            (uri (get uri item))
+        )
+            (if (and 
+                (< current-supply max-supply-limit)
+                (not (is-eq recipient (as-contract tx-sender)))
+            )
+                (begin
+                    ;; Update token data
+                    (map-set token-owners { token-id: token-id } { owner: recipient })
+                    (map-set token-metadata { token-id: token-id } { uri: uri })
+                    (map-set token-exists { token-id: token-id } { exists: true })
+                    
+                    ;; Update counters
+                    (var-set next-token-id (+ token-id u1))
+                    (var-set total-supply (+ current-supply u1))
+                    (increment-mint-count recipient)
+                    
+                    ;; Emit mint event
+                    (print {
+                        event: "batch-mint",
+                        token-id: token-id,
+                        recipient: recipient,
+                        uri: uri,
+                        minter: tx-sender,
+                        timestamp: block-height
+                    })
+                    
+                    (ok (unwrap-panic (as-max-len? (append success-list token-id) u10)))
+                )
+                acc ;; Return unchanged if validation fails
+            )
+        )
+        error acc
+    )
+)
