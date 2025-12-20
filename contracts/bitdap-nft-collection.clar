@@ -502,3 +502,35 @@
 (define-read-only (get-contract-owner)
     (ok (var-get contract-owner))
 )
+;; Royalty System Functions
+
+;; Set royalty information (owner only)
+(define-public (set-royalty-info (recipient principal) (percentage uint))
+    (begin
+        (asserts! (is-owner tx-sender) ERR-UNAUTHORIZED)
+        (asserts! (<= percentage MAX-ROYALTY-PERCENT) ERR-INVALID-ROYALTY)
+        
+        (var-set royalty-recipient recipient)
+        (var-set royalty-percent percentage)
+        
+        (print {
+            event: "royalty-info-updated",
+            recipient: recipient,
+            percentage: percentage,
+            updated-by: tx-sender,
+            timestamp: block-height
+        })
+        
+        (ok true)
+    )
+)
+
+;; Get royalty information
+(define-read-only (get-royalty-info)
+    (ok {
+        recipient: (var-get royalty-recipient),
+        percentage: (var-get royalty-percent),
+        max-percentage: MAX-ROYALTY-PERCENT,
+        total-collected: (var-get total-royalties-collected)
+    })
+)
