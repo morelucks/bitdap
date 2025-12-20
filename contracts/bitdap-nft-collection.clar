@@ -292,3 +292,30 @@
         )
     )
 )
+;; Get token URI (metadata)
+(define-read-only (get-token-uri (token-id uint))
+    (match (map-get? token-metadata { token-id: token-id })
+        metadata-data (ok (get uri metadata-data))
+        (ok none)
+    )
+)
+
+;; Get collection name
+(define-read-only (get-collection-name)
+    (ok (var-get collection-name))
+)
+
+;; Get collection symbol  
+(define-read-only (get-collection-symbol)
+    (ok (var-get collection-symbol))
+)
+
+;; Get collection URI
+(define-read-only (get-collection-uri)
+    (ok (var-get collection-uri))
+)
+
+;; Get total supply
+(define-read-only (get-total-supply)
+    (ok (var-get total-supply))
+)
