@@ -268,3 +268,27 @@
         )
     )
 )
+;; Read-Only Functions (SIP-009 Compliance)
+
+;; Get the owner of a specific token
+(define-read-only (get-owner (token-id uint))
+    (match (map-get? token-owners { token-id: token-id })
+        owner-data (ok (some (get owner owner-data)))
+        (ok none)
+    )
+)
+
+;; Check if a token exists
+(define-read-only (token-exists? (token-id uint))
+    (is-some (map-get? token-owners { token-id: token-id }))
+)
+
+;; Get the last minted token ID
+(define-read-only (get-last-token-id)
+    (let ((next-id (var-get next-token-id)))
+        (if (> next-id u1)
+            (ok (- next-id u1))
+            (ok u0)
+        )
+    )
+)
