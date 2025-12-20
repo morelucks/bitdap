@@ -534,3 +534,36 @@
         total-collected: (var-get total-royalties-collected)
     })
 )
+;; Calculate royalty amount for a given sale price
+(define-read-only (calculate-royalty (sale-price uint))
+    (let (
+        (royalty-percentage (var-get royalty-percent))
+        (royalty-amount (/ (* sale-price royalty-percentage) u10000))
+    )
+        (ok {
+            sale-price: sale-price,
+            royalty-amount: royalty-amount,
+            royalty-percentage: royalty-percentage,
+            recipient: (var-get royalty-recipient)
+        })
+    )
+)
+
+;; Record royalty payment (for external marketplace integration)
+(define-public (record-royalty-payment (amount uint))
+    (begin
+        ;; This function can be called by marketplaces to record royalty payments
+        ;; In a full implementation, this might include STX transfer validation
+        (var-set total-royalties-collected (+ (var-get total-royalties-collected) amount))
+        
+        (print {
+            event: "royalty-payment-recorded",
+            amount: amount,
+            recipient: (var-get royalty-recipient),
+            total-collected: (var-get total-royalties-collected),
+            timestamp: block-height
+        })
+        
+        (ok true)
+    )
+)
