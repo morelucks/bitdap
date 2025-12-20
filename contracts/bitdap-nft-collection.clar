@@ -211,3 +211,22 @@
         )
     )
 )
+;; SIP-009 compliant transfer with memo support
+(define-public (transfer-memo (token-id uint) (sender principal) (recipient principal) (memo (buff 34)))
+    (begin
+        ;; Execute standard transfer
+        (try! (transfer token-id sender recipient))
+        
+        ;; Emit memo
+        (print {
+            event: "transfer-memo",
+            token-id: token-id,
+            sender: sender,
+            recipient: recipient,
+            memo: memo,
+            timestamp: block-height
+        })
+        
+        (ok true)
+    )
+)
