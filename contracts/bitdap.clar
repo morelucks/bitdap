@@ -128,6 +128,27 @@
     }
 )
 
+;; buyer -> listing-id -> purchase record
+(define-map purchase-history
+    { buyer: principal, listing-id: uint }
+    {
+        purchase-price: uint,
+        purchased-at: uint,
+        seller: principal
+    }
+)
+
+;; seller -> list of listing-ids they've created
+(define-map seller-listings
+    { seller: principal }
+    { listing-ids: (list 100 uint) }
+)
+
+;; Marketplace fee configuration
+(define-data-var marketplace-fee-percent uint u2)
+(define-data-var marketplace-fee-recipient principal tx-sender)
+(define-data-var total-fees-collected uint u0)
+
 ;; public functions
 ;; - Core NFT operations: mint, transfer, burn.
 
@@ -428,6 +449,136 @@
     (match (map-get? marketplace-listings { listing-id: listing-id })
         listing-data (ok (get active listing-data))
         (ok false)
+    )
+)
+
+;; Public: create a new marketplace listing
+;; Only token owner can create listing
+;; Price must be greater than 0
+;; Listing expires after specified block height
+(define-public (create-listing (token-id uint) (price uint) (expiry-blocks uint))
+    (begin
+        (asserts! (not (var-get marketplace-paused)) ERR-PAUSED)
+        (asserts! (> price u0) ERR-INVALID-PRICE)
+        (asserts! (> expiry-blocks u0) ERR-INVALID-PRICE)
+        (match (map-get? token-owners { token-id: token-id })
+            owner-data (let ((owner (get owner owner-data)))
+                (if (not (is-eq owner tx-sender))
+                    ERR-NOT-OWNER
+                    (let (
+                        (listing-id (var-get next-listing-id))
+                        (current-block block-height)
+                        (expiry-block (+ current-block expiry-blocks))
+                    )
+                        (begin
+                            ;; Create listing
+                            (map-set marketplace-listings { listing-id: listing-id } {
+                                token-id: token-id,
+                                seller: tx-sender,
+                                price: price,
+                                created-at: current-block,
+                                active: true
+                            })
+                            ;; Track seller listings
+                            (let ((seller-row (default-to { listing-ids: (list) } (map-get? seller-listings { seller: tx-sender }))))
+                                (map-set seller-listings { seller: tx-sender } {
+                                    listing-ids: (unwrap-panic (as-max-len? (append (get listing-ids seller-row) listing-id) u100))
+                                })
+                            )
+                            ;; Increment counters
+                            (var-set listing-count (+ (var-get listing-count) u1))
+                            (var-set next-listing-id (+ listing-id u1))
+                            ;; Emit event
+                            (print (tuple
+                                (event "listing-created")
+                                (listing-id listing-id)
+                                (token-id token-id)
+                                (seller tx-sender)
+                                (price price)
+                                (expiry-block expiry-block)
+                            ))
+                            (ok listing-id)
+                        )
+                    )
+                )
+            )
+            ERR-NOT-FOUND
+        )
+    )
+)
+
+;; Public: purchase a marketplace listing
+;; Buyer sends STX, seller receives STX minus fees
+;; Listing must be active
+;; Token ownership transfers to buyer
+(define-public (purchase-listing (listing-id uint))
+    (begin
+        (asserts! (not (var-get marketplace-paused)) ERR-PAUSED)
+        (match (map-get? marketplace-listings { listing-id: listing-id })
+            listing-data (let (
+                (token-id (get token-id listing-data))
+                (seller (get seller listing-data))
+                (price (get price listing-data))
+                (is-active (get active listing-data))
+            )
+                (if (not is-active)
+                    ERR-LISTING-NOT-FOUND
+                    (if (is-eq seller tx-sender)
+                        ERR-SELF-TRANSFER
+                        (let (
+                            (fee-amount (/ (* price (var-get marketplace-fee-percent)) u100))
+                            (seller-amount (- price fee-amount))
+                        )
+                            (begin
+                                ;; Transfer token to buyer
+                                (map-set token-owners { token-id: token-id } { owner: tx-sender })
+                                ;; Mark listing as inactive
+                                (map-set marketplace-listings { listing-id: listing-id } {
+                                    token-id: token-id,
+                                    seller: seller,
+                                    price: price,
+                                    created-at: (get created-at listing-data),
+                                    active: false
+                                })
+                                ;; Record purchase
+                                (map-set purchase-history { buyer: tx-sender, listing-id: listing-id } {
+                                    purchase-price: price,
+                                    purchased-at: block-height,
+                                    seller: seller
+                                })
+                                ;; Update counters
+                                (var-set listing-count (if (> (var-get listing-count) u0)
+                                    (- (var-get listing-count) u1)
+                                    u0
+                                ))
+                                (var-set transaction-count (+ (var-get transaction-count) u1))
+                                (var-set total-fees-collected (+ (var-get total-fees-collected) fee-amount))
+                                ;; Track buyer if new
+                                (if (is-none (map-get? user-registry { user: tx-sender }))
+                                    (begin
+                                        (map-set user-registry { user: tx-sender } { active: true })
+                                        (var-set user-count (+ (var-get user-count) u1))
+                                    )
+                                    true
+                                )
+                                ;; Emit purchase event
+                                (print (tuple
+                                    (event "purchase-completed")
+                                    (listing-id listing-id)
+                                    (token-id token-id)
+                                    (buyer tx-sender)
+                                    (seller seller)
+                                    (price price)
+                                    (fee-amount fee-amount)
+                                ))
+                                (ok true)
+                            )
+                        )
+                    )
+                )
+            )
+            ERR-LISTING-NOT-FOUND
+        )
     )
 )
 
@@ -778,5 +929,57 @@
             )
         )
         error acc
+    )
+)
+
+;; Admin: set marketplace fee percentage
+(define-public (set-marketplace-fee (fee-percent uint))
+    (begin
+        (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-UNAUTHORIZED)
+        (asserts! (<= fee-percent u10) ERR-INVALID-PRICE)
+        (var-set marketplace-fee-percent fee-percent)
+        (print (tuple
+            (event "marketplace-fee-updated")
+            (fee-percent fee-percent)
+        ))
+        (ok true)
+    )
+)
+
+;; Admin: set marketplace fee recipient
+(define-public (set-fee-recipient (recipient principal))
+    (begin
+        (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-UNAUTHORIZED)
+        (var-set marketplace-fee-recipient recipient)
+        (print (tuple
+            (event "fee-recipient-updated")
+            (recipient recipient)
+        ))
+        (ok true)
+    )
+)
+
+;; Read-only: get marketplace fee info
+(define-read-only (get-marketplace-fee-info)
+    (ok (tuple
+        (fee-percent (var-get marketplace-fee-percent))
+        (fee-recipient (var-get marketplace-fee-recipient))
+        (total-fees-collected (var-get total-fees-collected))
+    ))
+)
+
+;; Read-only: get seller listings
+(define-read-only (get-seller-listings (seller principal))
+    (match (map-get? seller-listings { seller: seller })
+        seller-data (ok (get listing-ids seller-data))
+        (ok (list))
+    )
+)
+
+;; Read-only: get purchase history for buyer
+(define-read-only (get-purchase-history (buyer principal) (listing-id uint))
+    (match (map-get? purchase-history { buyer: buyer, listing-id: listing-id })
+        purchase-data (ok purchase-data)
+        ERR-NOT-FOUND
     )
 )

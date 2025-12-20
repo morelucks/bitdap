@@ -5,8 +5,46 @@ import { MintPass } from "@components/MintPass";
 import { PassList } from "@components/PassList";
 import { AdminPanel } from "@components/AdminPanel";
 import { EventFeed } from "@components/EventFeed";
+'use client';
+
 import { contractsConfig, formatNetworkLabel } from "@config/contracts";
 import styles from "./page.module.css";
+import { ContractInfo } from "@/components/ContractInfo";
+
+const sections = [
+  {
+    title: "Network",
+    rows: [
+      {
+        label: "Network",
+        value: formatNetworkLabel(contractsConfig.network)
+      },
+      {
+        label: "Explorer Base",
+        value: contractsConfig.explorerBase
+      },
+      {
+        label: "Hiro API",
+        value: contractsConfig.apiBase
+      }
+    ]
+  },
+  {
+    title: "Contracts",
+    rows: [
+      {
+        label: "bitdap",
+        value: contractsConfig.bitdap.address,
+        link: contractsConfig.bitdap.explorerUrl
+      },
+      {
+        label: "bitdap-token",
+        value: contractsConfig.bitdapToken.address,
+        link: contractsConfig.bitdapToken.explorerUrl
+      }
+    ]
+  }
+];
 
 export default function Home() {
   return (
@@ -20,6 +58,15 @@ export default function Home() {
         </div>
         <WalletButton />
       </header>
+    <main className="page">
+      <div className="row" style={{ marginBottom: 16 }}>
+        <div className="pill">Bitdap Frontend Scaffold</div>
+        <span className="small">
+          Update .env.local with contract addresses and network.
+        </span>
+      </div>
+
+      <ContractInfo />
 
       <div className={styles.infoSection}>
         <div className={styles.card}>

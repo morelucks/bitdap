@@ -117,14 +117,62 @@ The contract is being developed in clear, incremental milestones:
   - Holding a Bitdap Pass NFT signals your membership tier.  
   - Clients can check your wallet for Bitdap Pass tokens to decide what you can access.
 
+### Features
+
+#### ✅ Implemented
+
+- **Core NFT Functions**: Mint, transfer, burn operations
+- **Tier System**: Basic, Pro, VIP membership tiers
+- **Admin Management**: Admin transfer and contract controls
+- **Marketplace**: Complete NFT marketplace with listings and purchases
+- **Fee System**: Configurable marketplace fees
+- **Analytics**: Contract counters and statistics
+- **Wallet Integration**: Hiro Wallet support with network switching
+- **Contract Explorer**: Direct links to Hiro Explorer
+
+#### 🚀 Marketplace Features
+
+The Bitdap Pass Marketplace enables:
+
+- **Create Listings**: List NFTs with custom prices and expiry
+- **Purchase NFTs**: Buy listed NFTs with automatic fee deduction
+- **Manage Listings**: Update prices or cancel listings
+- **Fee Management**: Admin-controlled marketplace fees (max 10%)
+- **Purchase History**: Track all marketplace transactions
+- **Seller Tracking**: View all listings by seller
+- **Analytics Dashboard**: Real-time marketplace statistics
+
+### Quick Start - Marketplace
+
+```bash
+# 1. Navigate to marketplace
+# Visit http://localhost:3000/marketplace
+
+# 2. Connect wallet
+# Click "Connect Wallet" and approve with Hiro Wallet
+
+# 3. Create a listing
+# Go to "Create Listing" tab and fill in details
+
+# 4. Browse and purchase
+# View active listings and purchase NFTs
+```
+
+### Marketplace Documentation
+
+For detailed marketplace documentation, see [NFT_MARKETPLACE_FEATURE.md](./NFT_MARKETPLACE_FEATURE.md)
+
 ### Roadmap
 
 Upcoming work includes:
 
-- Implementing the full NFT data model and mint/transfer functions.  
-- Expanding the test suite in `tests/bitdap.test.ts`.  
-- Documenting concrete integration examples for web apps and bots.
-
+- Token staking and rewards system
+- Multi-wallet support (Leather, Xverse)
+- Advanced contract interactions
+- Analytics dashboard enhancements
+- Mobile PWA experience
+- Advanced NFT metadata features
+- Performance optimizations
 
 Contributions, issues, and suggestions are welcome as the Bitdap Pass contract evolves.
 
