@@ -319,3 +319,41 @@
 (define-read-only (get-total-supply)
     (ok (var-get total-supply))
 )
+;; Administrative Functions
+
+;; Set collection metadata (owner only)
+(define-public (set-collection-metadata 
+    (name (string-ascii 64)) 
+    (symbol (string-ascii 16)) 
+    (uri (optional (string-utf8 256)))
+    (description (string-utf8 256))
+)
+    (begin
+        ;; Validate caller is owner
+        (asserts! (is-owner tx-sender) ERR-UNAUTHORIZED)
+        
+        ;; Update collection metadata
+        (var-set collection-name name)
+        (var-set collection-symbol symbol)
+        (var-set collection-uri uri)
+        (var-set collection-description description)
+        
+        ;; Emit metadata update event
+        (print {
+            event: "collection-metadata-updated",
+            name: name,
+            symbol: symbol,
+            uri: uri,
+            description: description,
+            updated-by: tx-sender,
+            timestamp: block-height
+        })
+        
+        (ok true)
+    )
+)
+
+;; Get collection description
+(define-read-only (get-collection-description)
+    (ok (var-get collection-description))
+)
