@@ -46,3 +46,40 @@
         timestamp: block-height
     })
 )
+
+;; Data Variables
+
+;; Collection configuration
+(define-data-var next-token-id uint u1)
+(define-data-var total-supply uint u0)
+(define-data-var contract-paused bool false)
+
+;; Data Maps
+
+;; Token ownership tracking
+;; token-id -> owner principal
+(define-map token-owners
+    { token-id: uint }
+    { owner: principal }
+)
+
+;; Token metadata storage
+;; token-id -> metadata URI
+(define-map token-metadata
+    { token-id: uint }
+    { uri: (optional (string-utf8 256)) }
+)
+
+;; Per-address minting count tracking
+;; principal -> mint count
+(define-map address-mint-count
+    { address: principal }
+    { count: uint }
+)
+
+;; Token existence tracking for efficient queries
+;; token-id -> exists flag
+(define-map token-exists
+    { token-id: uint }
+    { exists: bool }
+)
