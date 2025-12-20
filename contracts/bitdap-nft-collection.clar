@@ -230,3 +230,41 @@
         (ok true)
     )
 )
+;; Burn (permanently destroy) an NFT
+(define-public (burn (token-id uint))
+    (let (
+        (owner-data (map-get? token-owners { token-id: token-id }))
+        (current-supply (var-get total-supply))
+    )
+        ;; Validate contract state
+        (asserts! (not (var-get contract-paused)) ERR-CONTRACT-PAUSED)
+        
+        ;; Validate token exists
+        (asserts! (is-some owner-data) ERR-NOT-FOUND)
+        
+        (let (
+            (current-owner (get owner (unwrap! owner-data ERR-NOT-FOUND)))
+        )
+            ;; Validate ownership
+            (asserts! (is-eq current-owner tx-sender) ERR-UNAUTHORIZED)
+            
+            ;; Delete token data (cleanup)
+            (map-delete token-owners { token-id: token-id })
+            (map-delete token-metadata { token-id: token-id })
+            (map-delete token-exists { token-id: token-id })
+            
+            ;; Update supply counter
+            (var-set total-supply (if (> current-supply u0) (- current-supply u1) u0))
+            
+            ;; Emit burn event
+            (print {
+                event: "burn",
+                token-id: token-id,
+                owner: current-owner,
+                timestamp: block-height
+            })
+            
+            (ok true)
+        )
+    )
+)
