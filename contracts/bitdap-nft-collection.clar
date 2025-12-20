@@ -49,9 +49,23 @@
 
 ;; Data Variables
 
+;; Collection metadata
+(define-data-var collection-name (string-ascii 64) "Bitdap NFT Collection")
+(define-data-var collection-symbol (string-ascii 16) "BDNFT")
+(define-data-var collection-uri (optional (string-utf8 256)) none)
+(define-data-var collection-description (string-utf8 256) u"General-purpose NFT collection for Bitdap ecosystem")
+
 ;; Collection configuration
 (define-data-var next-token-id uint u1)
 (define-data-var total-supply uint u0)
+(define-data-var max-supply uint DEFAULT-MAX-SUPPLY)
+
+;; Minting parameters
+(define-data-var mint-price uint u0) ;; Price in microSTX
+(define-data-var per-address-limit uint DEFAULT-PER-ADDRESS-LIMIT)
+(define-data-var minting-enabled bool true)
+
+;; Administrative variables
 (define-data-var contract-paused bool false)
 
 ;; Data Maps
