@@ -357,3 +357,66 @@
 (define-read-only (get-collection-description)
     (ok (var-get collection-description))
 )
+;; Set mint price (owner only)
+(define-public (set-mint-price (price uint))
+    (begin
+        (asserts! (is-owner tx-sender) ERR-UNAUTHORIZED)
+        (var-set mint-price price)
+        
+        (print {
+            event: "mint-price-updated",
+            price: price,
+            updated-by: tx-sender,
+            timestamp: block-height
+        })
+        
+        (ok true)
+    )
+)
+
+;; Set per-address minting limit (owner only)
+(define-public (set-per-address-limit (limit uint))
+    (begin
+        (asserts! (is-owner tx-sender) ERR-UNAUTHORIZED)
+        (var-set per-address-limit limit)
+        
+        (print {
+            event: "per-address-limit-updated",
+            limit: limit,
+            updated-by: tx-sender,
+            timestamp: block-height
+        })
+        
+        (ok true)
+    )
+)
+
+;; Set maximum supply (owner only)
+(define-public (set-max-supply (supply uint))
+    (begin
+        (asserts! (is-owner tx-sender) ERR-UNAUTHORIZED)
+        ;; Ensure new max supply is not less than current supply
+        (asserts! (>= supply (var-get total-supply)) ERR-INVALID-AMOUNT)
+        (var-set max-supply supply)
+        
+        (print {
+            event: "max-supply-updated",
+            supply: supply,
+            updated-by: tx-sender,
+            timestamp: block-height
+        })
+        
+        (ok true)
+    )
+)
+
+;; Get minting information
+(define-read-only (get-mint-info)
+    (ok {
+        price: (var-get mint-price),
+        per-address-limit: (var-get per-address-limit),
+        max-supply: (var-get max-supply),
+        current-supply: (var-get total-supply),
+        minting-enabled: (var-get minting-enabled)
+    })
+)
