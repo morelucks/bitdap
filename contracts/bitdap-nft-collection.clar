@@ -677,3 +677,51 @@
         error acc
     )
 )
+;; Query and Statistics Functions
+
+;; Get comprehensive collection information
+(define-read-only (get-collection-info)
+    (ok {
+        name: (var-get collection-name),
+        symbol: (var-get collection-symbol),
+        description: (var-get collection-description),
+        uri: (var-get collection-uri),
+        total-supply: (var-get total-supply),
+        max-supply: (var-get max-supply),
+        remaining-supply: (- (var-get max-supply) (var-get total-supply)),
+        owner: (var-get contract-owner),
+        paused: (var-get contract-paused),
+        minting-enabled: (var-get minting-enabled)
+    })
+)
+
+;; Get mint count for a specific address
+(define-read-only (get-address-mint-count (address principal))
+    (ok (get-mint-count address))
+)
+
+;; Get batch token information
+(define-read-only (get-tokens-info (token-ids (list 10 uint)))
+    (ok (map get-token-info-helper token-ids))
+)
+
+;; Helper function for batch token queries
+(define-private (get-token-info-helper (token-id uint))
+    {
+        token-id: token-id,
+        owner: (map-get? token-owners { token-id: token-id }),
+        uri: (map-get? token-metadata { token-id: token-id }),
+        exists: (is-some (map-get? token-owners { token-id: token-id }))
+    }
+)
+
+;; Get contract version and info
+(define-read-only (get-contract-info)
+    (ok {
+        version: "1.0.0",
+        name: "Bitdap NFT Collection",
+        description: "General-purpose NFT collection contract for the Bitdap ecosystem",
+        sip-009-compliant: true,
+        features: (list "minting" "burning" "transfers" "royalties" "batch-operations" "pause-controls")
+    })
+)
