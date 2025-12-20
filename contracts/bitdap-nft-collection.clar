@@ -159,6 +159,16 @@
         (var-set total-supply (+ current-supply u1))
         (increment-mint-count recipient)
         
+        ;; Emit mint event
+        (print {
+            event: "mint",
+            token-id: token-id,
+            recipient: recipient,
+            uri: uri,
+            minter: tx-sender,
+            timestamp: block-height
+        })
+        
         ;; Return token ID
         (ok token-id)
     )
