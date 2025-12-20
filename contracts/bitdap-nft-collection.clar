@@ -420,3 +420,60 @@
         minting-enabled: (var-get minting-enabled)
     })
 )
+;; Pause contract operations (owner only)
+(define-public (pause-contract)
+    (begin
+        (asserts! (is-owner tx-sender) ERR-UNAUTHORIZED)
+        (var-set contract-paused true)
+        
+        (print {
+            event: "contract-paused",
+            paused-by: tx-sender,
+            timestamp: block-height
+        })
+        
+        (ok true)
+    )
+)
+
+;; Unpause contract operations (owner only)
+(define-public (unpause-contract)
+    (begin
+        (asserts! (is-owner tx-sender) ERR-UNAUTHORIZED)
+        (var-set contract-paused false)
+        
+        (print {
+            event: "contract-unpaused",
+            unpaused-by: tx-sender,
+            timestamp: block-height
+        })
+        
+        (ok true)
+    )
+)
+
+;; Toggle minting enabled state (owner only)
+(define-public (set-minting-enabled (enabled bool))
+    (begin
+        (asserts! (is-owner tx-sender) ERR-UNAUTHORIZED)
+        (var-set minting-enabled enabled)
+        
+        (print {
+            event: "minting-enabled-updated",
+            enabled: enabled,
+            updated-by: tx-sender,
+            timestamp: block-height
+        })
+        
+        (ok true)
+    )
+)
+
+;; Get contract status
+(define-read-only (get-contract-status)
+    (ok {
+        paused: (var-get contract-paused),
+        minting-enabled: (var-get minting-enabled),
+        owner: (var-get contract-owner)
+    })
+)
