@@ -718,12 +718,23 @@
     )
 )
 
-;; Batch mint multiple NFTs (owner only for efficiency)
+;; Batch mint multiple NFTs with payment validation
 (define-public (batch-mint (recipients (list 10 { recipient: principal, uri: (optional (string-utf8 256)) })))
-    (begin
+    (let (
+        (mint-price-value (var-get mint-price))
+        (batch-size (len recipients))
+        (total-cost (* mint-price-value batch-size))
+    )
         (asserts! (is-owner tx-sender) ERR-UNAUTHORIZED)
         (asserts! (not (var-get contract-paused)) ERR-CONTRACT-PAUSED)
-        (asserts! (var-get minting-enabled) ERR-CONTRACT-PAUSED)
+        (asserts! (var-get minting-enabled) ERR-MINTING-DISABLED)
+        (asserts! (<= batch-size u10) ERR-BATCH-LIMIT-EXCEEDED)
+        
+        ;; Validate payment for batch minting
+        (if (> total-cost u0)
+            (try! (stx-transfer? total-cost tx-sender (as-contract tx-sender)))
+            true
+        )
         
         (fold batch-mint-helper recipients (ok (list)))
     )
