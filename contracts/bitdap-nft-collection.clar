@@ -1054,6 +1054,70 @@
     })
 )
 
+;; Advanced error handling and validation functions
+
+;; Validate token ID range
+(define-private (is-valid-token-id (token-id uint))
+    (and (> token-id u0) (< token-id (var-get next-token-id)))
+)
+
+;; Validate metadata URI format
+(define-private (is-valid-metadata-uri (uri (optional (string-utf8 256))))
+    (match uri
+        some-uri (> (len some-uri) u0)
+        true ;; None is valid
+    )
+)
+
+;; Comprehensive validation for minting
+(define-private (validate-mint-request (recipient principal) (uri (optional (string-utf8 256))))
+    (let (
+        (current-supply (var-get total-supply))
+        (max-supply-limit (var-get max-supply))
+        (recipient-mint-count (get-mint-count recipient))
+        (per-address-limit-value (var-get per-address-limit))
+    )
+        (and
+            (not (var-get contract-paused))
+            (var-get minting-enabled)
+            (< current-supply max-supply-limit)
+            (< recipient-mint-count per-address-limit-value)
+            (not (is-eq recipient (as-contract tx-sender)))
+            (is-valid-metadata-uri uri)
+        )
+    )
+)
+
+;; Safe mint with comprehensive validation
+(define-public (safe-mint (recipient principal) (uri (optional (string-utf8 256))))
+    (begin
+        ;; Pre-validation
+        (asserts! (validate-mint-request recipient uri) ERR-INVALID-AMOUNT)
+        
+        ;; Execute mint
+        (mint recipient uri)
+    )
+)
+
+;; Emergency functions for contract recovery
+
+;; Emergency pause (can be called by owner in critical situations)
+(define-public (emergency-pause (reason (string-utf8 256)))
+    (begin
+        (asserts! (is-owner tx-sender) ERR-UNAUTHORIZED)
+        (var-set contract-paused true)
+        
+        (print {
+            event: "emergency-pause",
+            reason: reason,
+            paused-by: tx-sender,
+            timestamp: block-height
+        })
+        
+        (ok true)
+    )
+)
+
 ;; Initialize collection with event emission
 (begin
     (emit-collection-created)
