@@ -108,6 +108,76 @@
     { exists: bool }
 )
 
+;; Token approval system for enhanced transfer functionality
+(define-map token-approvals
+    { token-id: uint }
+    { approved: principal }
+)
+
+;; Operator approvals for all tokens of an owner
+(define-map operator-approvals
+    { owner: principal, operator: principal }
+    { approved: bool }
+)
+
+;; Approve another principal to transfer a specific token
+(define-public (approve (token-id uint) (approved principal))
+    (let (
+        (owner-data (map-get? token-owners { token-id: token-id }))
+    )
+        (asserts! (is-some owner-data) ERR-NOT-FOUND)
+        
+        (let (
+            (current-owner (get owner (unwrap! owner-data ERR-NOT-FOUND)))
+        )
+            (asserts! (is-eq current-owner tx-sender) ERR-UNAUTHORIZED)
+            (asserts! (not (is-eq current-owner approved)) ERR-SELF-TRANSFER)
+            
+            (map-set token-approvals { token-id: token-id } { approved: approved })
+            
+            (print {
+                event: "approval",
+                token-id: token-id,
+                owner: current-owner,
+                approved: approved,
+                timestamp: block-height
+            })
+            
+            (ok true)
+        )
+    )
+)
+
+;; Set approval for all tokens (operator approval)
+(define-public (set-approval-for-all (operator principal) (approved bool))
+    (begin
+        (asserts! (not (is-eq tx-sender operator)) ERR-SELF-TRANSFER)
+        
+        (map-set operator-approvals 
+            { owner: tx-sender, operator: operator } 
+            { approved: approved }
+        )
+        
+        (print {
+            event: "approval-for-all",
+            owner: tx-sender,
+            operator: operator,
+            approved: approved,
+            timestamp: block-height
+        })
+        
+        (ok true)
+    )
+)
+
+;; Check if an operator is approved for a specific token
+(define-private (is-approved-for-token (token-id uint) (operator principal))
+    (match (map-get? token-approvals { token-id: token-id })
+        approval-data (is-eq (get approved approval-data) operator)
+        false
+    )
+)
+
 ;; Private Functions
 
 ;; Check if caller is contract owner
