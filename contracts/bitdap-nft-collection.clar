@@ -306,12 +306,19 @@
         (let (
             (current-owner (get owner (unwrap! owner-data ERR-NOT-FOUND)))
         )
-            ;; Validate ownership or approval (for now, only owner can transfer)
+            ;; Validate ownership or approval
             (asserts! (is-eq current-owner sender) ERR-UNAUTHORIZED)
-            (asserts! (or (is-eq sender tx-sender) (is-eq current-owner tx-sender)) ERR-UNAUTHORIZED)
+            (asserts! (or 
+                (is-eq sender tx-sender)
+                (is-approved-for-token token-id tx-sender)
+                (is-approved-for-all sender tx-sender)
+            ) ERR-UNAUTHORIZED)
             
             ;; Prevent self-transfer
             (asserts! (not (is-eq sender recipient)) ERR-SELF-TRANSFER)
+            
+            ;; Clear token approval after transfer
+            (map-delete token-approvals { token-id: token-id })
             
             ;; Update ownership
             (map-set token-owners { token-id: token-id } { owner: recipient })
