@@ -863,21 +863,22 @@
         error acc
     )
 )
-;; Batch transfer multiple NFTs
+;; Enhanced batch transfer with approval support
 (define-public (batch-transfer (transfers (list 10 { token-id: uint, recipient: principal })))
     (begin
         (asserts! (not (var-get contract-paused)) ERR-CONTRACT-PAUSED)
-        (fold batch-transfer-helper transfers (ok true))
+        (asserts! (<= (len transfers) u10) ERR-BATCH-LIMIT-EXCEEDED)
+        (fold batch-transfer-helper transfers (ok u0))
     )
 )
 
 ;; Helper function for batch transfers
 (define-private (batch-transfer-helper 
     (item { token-id: uint, recipient: principal })
-    (acc (response bool uint))
+    (acc (response uint uint))
 )
     (match acc
-        success (let (
+        success-count (let (
             (token-id (get token-id item))
             (recipient (get recipient item))
             (owner-data (map-get? token-owners { token-id: token-id }))
@@ -887,10 +888,17 @@
                     (current-owner (get owner (unwrap! owner-data (err u101))))
                 )
                     (if (and 
-                        (is-eq current-owner tx-sender)
+                        (or 
+                            (is-eq current-owner tx-sender)
+                            (is-approved-for-token token-id tx-sender)
+                            (is-approved-for-all current-owner tx-sender)
+                        )
                         (not (is-eq current-owner recipient))
                     )
                         (begin
+                            ;; Clear token approval
+                            (map-delete token-approvals { token-id: token-id })
+                            
                             ;; Update ownership
                             (map-set token-owners { token-id: token-id } { owner: recipient })
                             
@@ -900,12 +908,13 @@
                                 token-id: token-id,
                                 sender: current-owner,
                                 recipient: recipient,
+                                operator: tx-sender,
                                 timestamp: block-height
                             })
                             
-                            (ok true)
+                            (ok (+ success-count u1))
                         )
-                        (err u102) ;; Unauthorized or self-transfer
+                        (err u401) ;; Unauthorized or self-transfer
                     )
                 )
                 (err u404) ;; Token not found
