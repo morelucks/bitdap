@@ -946,17 +946,50 @@
     (ok (get-mint-count address))
 )
 
-;; Get batch token information
-(define-read-only (get-tokens-info (token-ids (list 10 uint)))
-    (ok (map get-token-info-helper token-ids))
+;; Enhanced query functions with approval information
+
+;; Get approved operator for a specific token
+(define-read-only (get-approved (token-id uint))
+    (match (map-get? token-approvals { token-id: token-id })
+        approval-data (ok (some (get approved approval-data)))
+        (ok none)
+    )
 )
 
-;; Helper function for batch token queries
-(define-private (get-token-info-helper (token-id uint))
+;; Check if operator is approved for all tokens of owner
+(define-read-only (is-approved-for-all-query (owner principal) (operator principal))
+    (ok (is-approved-for-all owner operator))
+)
+
+;; Get comprehensive token information including approvals
+(define-read-only (get-token-info-detailed (token-id uint))
+    (let (
+        (owner-data (map-get? token-owners { token-id: token-id }))
+        (metadata-data (map-get? token-metadata { token-id: token-id }))
+        (approval-data (map-get? token-approvals { token-id: token-id }))
+    )
+        (ok {
+            token-id: token-id,
+            owner: owner-data,
+            metadata: metadata-data,
+            approved: approval-data,
+            exists: (is-some owner-data)
+        })
+    )
+)
+
+;; Get batch token information with approvals
+(define-read-only (get-tokens-info-detailed (token-ids (list 10 uint)))
+    (ok (map get-token-info-detailed-helper token-ids))
+)
+
+;; Helper function for detailed batch token queries
+(define-private (get-token-info-detailed-helper (token-id uint))
     {
         token-id: token-id,
         owner: (map-get? token-owners { token-id: token-id }),
-        uri: (map-get? token-metadata { token-id: token-id }),
+        metadata: (map-get? token-metadata { token-id: token-id }),
+        approved: (map-get? token-approvals { token-id: token-id }),
         exists: (is-some (map-get? token-owners { token-id: token-id }))
     }
 )
