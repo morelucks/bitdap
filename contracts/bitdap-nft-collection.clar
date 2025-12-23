@@ -24,6 +24,11 @@
 (define-constant ERR-INVALID-ROYALTY (err u408))
 (define-constant ERR-INVALID-RECIPIENT (err u409))
 (define-constant ERR-TOKEN-EXISTS (err u410))
+(define-constant ERR-MINTING-DISABLED (err u411))
+(define-constant ERR-INVALID-TOKEN-ID (err u412))
+(define-constant ERR-BATCH-LIMIT-EXCEEDED (err u413))
+(define-constant ERR-INVALID-METADATA (err u414))
+(define-constant ERR-TRANSFER-FAILED (err u415))
 
 ;; Collection constants
 (define-constant MAX-ROYALTY-PERCENT u1000) ;; 10% maximum royalty
@@ -147,7 +152,11 @@
         ;; Validate recipient
         (asserts! (not (is-eq recipient (as-contract tx-sender))) ERR-INVALID-RECIPIENT)
         
-        ;; TODO: Add payment validation when STX transfer is implemented
+        ;; Validate payment if mint price is set
+        (if (> mint-price-value u0)
+            (try! (stx-transfer? mint-price-value tx-sender (as-contract tx-sender)))
+            true
+        )
         
         ;; Update token ownership and metadata
         (map-set token-owners { token-id: token-id } { owner: recipient })
@@ -166,6 +175,7 @@
             recipient: recipient,
             uri: uri,
             minter: tx-sender,
+            price-paid: mint-price-value,
             timestamp: block-height
         })
         
@@ -204,6 +214,45 @@
                 token-id: token-id,
                 sender: sender,
                 recipient: recipient,
+                timestamp: block-height
+            })
+            
+            (ok true)
+        )
+    )
+)
+
+;; Transfer from - allows approved operators to transfer tokens
+(define-public (transfer-from (token-id uint) (sender principal) (recipient principal))
+    (let (
+        (owner-data (map-get? token-owners { token-id: token-id }))
+    )
+        ;; Validate contract state
+        (asserts! (not (var-get contract-paused)) ERR-CONTRACT-PAUSED)
+        
+        ;; Validate token exists
+        (asserts! (is-some owner-data) ERR-NOT-FOUND)
+        
+        (let (
+            (current-owner (get owner (unwrap! owner-data ERR-NOT-FOUND)))
+        )
+            ;; Validate ownership or approval (for now, only owner can transfer)
+            (asserts! (is-eq current-owner sender) ERR-UNAUTHORIZED)
+            (asserts! (or (is-eq sender tx-sender) (is-eq current-owner tx-sender)) ERR-UNAUTHORIZED)
+            
+            ;; Prevent self-transfer
+            (asserts! (not (is-eq sender recipient)) ERR-SELF-TRANSFER)
+            
+            ;; Update ownership
+            (map-set token-owners { token-id: token-id } { owner: recipient })
+            
+            ;; Emit transfer event
+            (print {
+                event: "transfer-from",
+                token-id: token-id,
+                sender: sender,
+                recipient: recipient,
+                operator: tx-sender,
                 timestamp: block-height
             })
             
@@ -567,7 +616,107 @@
         (ok true)
     )
 )
+
+;; Fund Management Functions
+
+;; Withdraw accumulated funds from minting (owner only)
+(define-public (withdraw-funds (amount uint))
+    (let (
+        (contract-balance (stx-get-balance (as-contract tx-sender)))
+    )
+        ;; Validate caller is owner
+        (asserts! (is-owner tx-sender) ERR-UNAUTHORIZED)
+        
+        ;; Validate amount
+        (asserts! (> amount u0) ERR-INVALID-AMOUNT)
+        (asserts! (<= amount contract-balance) ERR-INSUFFICIENT-PAYMENT)
+        
+        ;; Transfer STX to owner
+        (try! (as-contract (stx-transfer? amount tx-sender (var-get contract-owner))))
+        
+        ;; Emit withdrawal event
+        (print {
+            event: "funds-withdrawn",
+            amount: amount,
+            recipient: (var-get contract-owner),
+            remaining-balance: (- contract-balance amount),
+            timestamp: block-height
+        })
+        
+        (ok true)
+    )
+)
+
+;; Withdraw all accumulated funds (owner only)
+(define-public (withdraw-all-funds)
+    (let (
+        (contract-balance (stx-get-balance (as-contract tx-sender)))
+    )
+        (asserts! (is-owner tx-sender) ERR-UNAUTHORIZED)
+        (asserts! (> contract-balance u0) ERR-INVALID-AMOUNT)
+        
+        (try! (withdraw-funds contract-balance))
+        (ok true)
+    )
+)
+
+;; Get contract balance
+(define-read-only (get-contract-balance)
+    (ok (stx-get-balance (as-contract tx-sender)))
+)
 ;; Batch Operations
+
+;; Batch burn multiple NFTs
+(define-public (batch-burn (token-ids (list 10 uint)))
+    (begin
+        (asserts! (not (var-get contract-paused)) ERR-CONTRACT-PAUSED)
+        (fold batch-burn-helper token-ids (ok u0))
+    )
+)
+
+;; Helper function for batch burning
+(define-private (batch-burn-helper 
+    (token-id uint)
+    (acc (response uint uint))
+)
+    (match acc
+        success-count (let (
+            (owner-data (map-get? token-owners { token-id: token-id }))
+            (current-supply (var-get total-supply))
+        )
+            (if (is-some owner-data)
+                (let (
+                    (current-owner (get owner (unwrap! owner-data (err u101))))
+                )
+                    (if (is-eq current-owner tx-sender)
+                        (begin
+                            ;; Delete token data (cleanup)
+                            (map-delete token-owners { token-id: token-id })
+                            (map-delete token-metadata { token-id: token-id })
+                            (map-delete token-exists { token-id: token-id })
+                            
+                            ;; Update supply counter
+                            (var-set total-supply (if (> current-supply u0) (- current-supply u1) u0))
+                            
+                            ;; Emit burn event
+                            (print {
+                                event: "batch-burn",
+                                token-id: token-id,
+                                owner: current-owner,
+                                timestamp: block-height
+                            })
+                            
+                            (ok (+ success-count u1))
+                        )
+                        (err u401) ;; Unauthorized
+                    )
+                )
+                (err u404) ;; Token not found
+            )
+        )
+        error acc
+    )
+)
 
 ;; Batch mint multiple NFTs (owner only for efficiency)
 (define-public (batch-mint (recipients (list 10 { recipient: principal, uri: (optional (string-utf8 256)) })))
