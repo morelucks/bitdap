@@ -994,13 +994,67 @@
     }
 )
 
+;; Enhanced event system with comprehensive logging
+
+;; Emit collection creation event (called during initialization)
+(define-private (emit-collection-created)
+    (print {
+        event: "collection-created",
+        name: (var-get collection-name),
+        symbol: (var-get collection-symbol),
+        max-supply: (var-get max-supply),
+        owner: (var-get contract-owner),
+        timestamp: block-height
+    })
+)
+
+;; Enhanced mint function with detailed events
+(define-public (mint-with-events (recipient principal) (uri (optional (string-utf8 256))))
+    (let (
+        (mint-result (mint recipient uri))
+    )
+        (match mint-result
+            success (let (
+                (token-id success)
+            )
+                (print {
+                    event: "mint-success",
+                    token-id: token-id,
+                    recipient: recipient,
+                    uri: uri,
+                    minter: tx-sender,
+                    price-paid: (var-get mint-price),
+                    total-supply: (var-get total-supply),
+                    timestamp: block-height
+                })
+                (ok token-id)
+            )
+            error (begin
+                (print {
+                    event: "mint-failed",
+                    recipient: recipient,
+                    error-code: error,
+                    minter: tx-sender,
+                    timestamp: block-height
+                })
+                error
+            )
+        )
+    )
+)
+
 ;; Get contract version and info
 (define-read-only (get-contract-info)
     (ok {
-        version: "1.0.0",
+        version: "2.0.0",
         name: "Bitdap NFT Collection",
-        description: "General-purpose NFT collection contract for the Bitdap ecosystem",
+        description: "Enhanced NFT collection contract with approvals, events, and batch operations",
         sip-009-compliant: true,
-        features: (list "minting" "burning" "transfers" "royalties" "batch-operations" "pause-controls")
+        features: (list "minting" "burning" "transfers" "approvals" "royalties" "batch-operations" "pause-controls" "enhanced-events" "fund-management")
     })
+)
+
+;; Initialize collection with event emission
+(begin
+    (emit-collection-created)
 )
