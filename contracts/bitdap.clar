@@ -2586,3 +2586,280 @@
         (timestamp stacks-block-height)
     ))
 )
+;; Comprehensive Read-Only Query Functions
+
+;; Get comprehensive contract status
+(define-read-only (get-contract-status)
+    (ok (tuple
+        (version u3) ;; Contract version
+        (paused (var-get paused))
+        (mint-paused (var-get mint-paused))
+        (transfer-paused (var-get transfer-paused))
+        (marketplace-paused (var-get marketplace-operations-paused))
+        (emergency-mode (var-get emergency-mode))
+        (total-supply (var-get total-supply))
+        (max-supply MAX-SUPPLY)
+        (next-token-id (var-get next-token-id))
+        (contract-owner (var-get contract-owner))
+        (security-admin (var-get security-admin))
+        (last-updated stacks-block-height)
+    ))
+)
+
+;; Get detailed token information
+(define-read-only (get-token-details (token-id uint))
+    (match (map-get? token-owners { token-id: token-id })
+        owner-data (match (map-get? token-metadata { token-id: token-id })
+            meta-data (ok (tuple
+                (token-id token-id)
+                (owner (get owner owner-data))
+                (tier (get tier meta-data))
+                (tier-name (get-tier-name (get tier meta-data)))
+                (uri (get uri meta-data))
+                (exists true)
+                (minted-at (estimate-mint-time token-id))
+            ))
+            ERR-NOT-FOUND
+        )
+        ERR-NOT-FOUND
+    )
+)
+
+;; Get tier name from tier number
+(define-private (get-tier-name (tier uint))
+    (if (is-eq tier TIER-BASIC)
+        "Basic"
+        (if (is-eq tier TIER-PRO)
+            "Pro"
+            (if (is-eq tier TIER-VIP)
+                "VIP"
+                "Unknown"
+            )
+        )
+    )
+)
+
+;; Estimate mint time based on token ID (simplified)
+(define-private (estimate-mint-time (token-id uint))
+    ;; Simplified estimation - in practice would track actual mint times
+    (- stacks-block-height (* (- (var-get next-token-id) token-id) u10))
+)
+
+;; Get marketplace activity summary
+(define-read-only (get-marketplace-activity)
+    (ok (tuple
+        (active-listings (var-get listing-count))
+        (total-fees-collected (var-get total-fees-collected))
+        (marketplace-fee-percent (var-get marketplace-fee-percent))
+        (fee-recipient (var-get marketplace-fee-recipient))
+        (next-listing-id (var-get next-listing-id))
+        (next-offer-id (var-get next-offer-id))
+        (min-listing-price (var-get min-listing-price))
+        (max-listing-price (var-get max-listing-price))
+        (offer-expiry-blocks (var-get offer-expiry-blocks))
+    ))
+)
+
+;; Get user activity summary
+(define-read-only (get-user-activity (user principal))
+    (let (
+        (user-data (default-to { active: false } (map-get? user-registry { user: user })))
+        (blacklist-data (map-get? blacklisted-users { user: user }))
+        (seller-data (map-get? seller-listings { user: user }))
+    )
+        (ok (tuple
+            (user user)
+            (active (get active user-data))
+            (blacklisted (match blacklist-data
+                data (get blacklisted data)
+                false
+            ))
+            (blacklist-reason (match blacklist-data
+                data (some (get reason data))
+                none
+            ))
+            (listings-created (match seller-data
+                data (len (get listing-ids data))
+                u0
+            ))
+            (rate-limit-status (get-rate-limit-status user))
+        ))
+    )
+)
+
+;; Get rate limit status for user
+(define-private (get-rate-limit-status (user principal))
+    (let (
+        (mint-limit (default-to 
+            { count: u0, window-start: stacks-block-height, last-operation: u0 }
+            (map-get? rate-limits { user: user, operation: "mint" })
+        ))
+        (transfer-limit (default-to 
+            { count: u0, window-start: stacks-block-height, last-operation: u0 }
+            (map-get? rate-limits { user: user, operation: "transfer" })
+        ))
+    )
+        (tuple
+            (mint-operations (get count mint-limit))
+            (transfer-operations (get count transfer-limit))
+            (window-start (get window-start mint-limit))
+            (max-operations (var-get max-operations-per-window))
+            (window-duration (var-get rate-limit-window))
+        )
+    )
+)
+
+;; Get security configuration
+(define-read-only (get-security-config)
+    (ok (tuple
+        (rate-limit-window (var-get rate-limit-window))
+        (max-operations-per-window (var-get max-operations-per-window))
+        (security-admin (var-get security-admin))
+        (emergency-mode (var-get emergency-mode))
+        (blacklist-enabled true)
+        (rate-limiting-enabled true)
+    ))
+)
+
+;; Get tier statistics with detailed breakdown
+(define-read-only (get-tier-statistics)
+    (let (
+        (basic-supply (get supply (default-to { supply: u0 } (map-get? tier-supplies { tier: TIER-BASIC }))))
+        (pro-supply (get supply (default-to { supply: u0 } (map-get? tier-supplies { tier: TIER-PRO }))))
+        (vip-supply (get supply (default-to { supply: u0 } (map-get? tier-supplies { tier: TIER-VIP }))))
+        (total-supply (var-get total-supply))
+    )
+        (ok (tuple
+            (basic (tuple
+                (current-supply basic-supply)
+                (max-supply MAX-BASIC-SUPPLY)
+                (percentage (if (> total-supply u0) (/ (* basic-supply u100) total-supply) u0))
+                (remaining (- MAX-BASIC-SUPPLY basic-supply))
+            ))
+            (pro (tuple
+                (current-supply pro-supply)
+                (max-supply MAX-PRO-SUPPLY)
+                (percentage (if (> total-supply u0) (/ (* pro-supply u100) total-supply) u0))
+                (remaining (- MAX-PRO-SUPPLY pro-supply))
+            ))
+            (vip (tuple
+                (current-supply vip-supply)
+                (max-supply MAX-VIP-SUPPLY)
+                (percentage (if (> total-supply u0) (/ (* vip-supply u100) total-supply) u0))
+                (remaining (- MAX-VIP-SUPPLY vip-supply))
+            ))
+            (totals (tuple
+                (total-supply total-supply)
+                (max-supply MAX-SUPPLY)
+                (utilization-percent (if (> MAX-SUPPLY u0) (/ (* total-supply u100) MAX-SUPPLY) u0))
+            ))
+        ))
+    )
+)
+
+;; Get listing details with enhanced information
+(define-read-only (get-enhanced-listing (listing-id uint))
+    (match (map-get? marketplace-listings { listing-id: listing-id })
+        listing-data (match (map-get? token-metadata { token-id: (get token-id listing-data) })
+            token-meta (ok (tuple
+                (listing-id listing-id)
+                (token-id (get token-id listing-data))
+                (seller (get seller listing-data))
+                (price (get price listing-data))
+                (reserve-price (get reserve-price listing-data))
+                (expiry-block (get expiry-block listing-data))
+                (listing-type (get listing-type listing-data))
+                (created-at (get created-at listing-data))
+                (updated-at (get updated-at listing-data))
+                (active (get active listing-data))
+                (view-count (get view-count listing-data))
+                (token-tier (get tier token-meta))
+                (token-tier-name (get-tier-name (get tier token-meta)))
+                (token-uri (get uri token-meta))
+                (time-remaining (match (get expiry-block listing-data)
+                    expiry (if (> expiry stacks-block-height) (some (- expiry stacks-block-height)) none)
+                    none
+                ))
+            ))
+            ERR-NOT-FOUND
+        )
+        ERR-LISTING-NOT-FOUND
+    )
+)
+
+;; Get offer details with enhanced information
+(define-read-only (get-enhanced-offer (offer-id uint))
+    (match (map-get? marketplace-offers { offer-id: offer-id })
+        offer-data (ok (tuple
+            (offer-id offer-id)
+            (listing-id (get listing-id offer-data))
+            (token-id (get token-id offer-data))
+            (bidder (get bidder offer-data))
+            (amount (get amount offer-data))
+            (expiry-block (get expiry-block offer-data))
+            (created-at (get created-at offer-data))
+            (status (get status offer-data))
+            (time-remaining (if (> (get expiry-block offer-data) stacks-block-height) 
+                (some (- (get expiry-block offer-data) stacks-block-height)) 
+                none
+            ))
+            (expired (> stacks-block-height (get expiry-block offer-data)))
+        ))
+        ERR-OFFER-NOT-FOUND
+    )
+)
+
+;; Check multiple feature flags at once
+(define-read-only (check-feature-flags (user principal) (features (list 10 (string-ascii 32))))
+    (ok (map check-single-feature-flag features))
+)
+
+;; Helper to check single feature flag
+(define-private (check-single-feature-flag (feature (string-ascii 32)))
+    (tuple
+        (feature feature)
+        (enabled (match (map-get? feature-flags { feature: feature })
+            flag-data (get enabled flag-data)
+            false
+        ))
+        (rollout-percentage (match (map-get? feature-flags { feature: feature })
+            flag-data (get rollout-percentage flag-data)
+            u0
+        ))
+    )
+)
+
+;; Get admin role information
+(define-read-only (get-admin-roles (admin principal))
+    (match (map-get? admin-roles { admin: admin })
+        role-data (ok (tuple
+            (admin admin)
+            (role (get role role-data))
+            (granted-at (get granted-at role-data))
+            (granted-by (get granted-by role-data))
+            (is-contract-owner (is-eq admin (var-get contract-owner)))
+        ))
+        (if (is-eq admin (var-get contract-owner))
+            (ok (tuple
+                (admin admin)
+                (role "contract-owner")
+                (granted-at u0)
+                (granted-by admin)
+                (is-contract-owner true)
+            ))
+            ERR-NOT-FOUND
+        )
+    )
+)
+
+;; Get comprehensive error information
+(define-read-only (get-error-info (error-code uint))
+    (match (get-error-message error-code)
+        error-data (ok error-data)
+        (ok (tuple
+            (category "unknown")
+            (message u"Unknown error code")
+            (suggestion u"Check error code documentation")
+        ))
+    )
+)
