@@ -604,62 +604,68 @@
         (uri (optional (string-utf8 256)))
     )
     (begin
-        (asserts! (not (var-get paused)) ERR-PAUSED)
-        (asserts! (not (var-get marketplace-paused)) ERR-PAUSED)
-        ;; Validate tier first.
-        (if (not (is-valid-tier tier))
-            ERR-INVALID-TIER
+        ;; Enhanced security and validation checks
+        (try! (validate-security-checks tx-sender "mint"))
+        (try! (validate-not-paused))
+        (asserts! (not (var-get mint-paused)) ERR-FEATURE-DISABLED)
+        (try! (validate-tier tier))
+        
+        ;; Check feature flag for minting
+        (asserts! (unwrap! (is-feature-enabled "minting" tx-sender) ERR-FEATURE-DISABLED) ERR-FEATURE-DISABLED)
+        
+        (let (
+            (current-total (var-get total-supply))
+            (new-total (+ current-total u1))
+        )
+            ;; Enhanced supply checks
+            (asserts! (<= new-total MAX-SUPPLY) ERR-MAX-SUPPLY)
+            
             (let (
-                    (current-total (var-get total-supply))
-                    (new-total (+ current-total u1))
+                (tier-row (default-to { supply: u0 } (map-get? tier-supplies { tier: tier })))
+                (tier-supply (get supply tier-row))
+                (new-tier-supply (+ tier-supply u1))
+            )
+                ;; Enhanced tier supply check
+                (asserts! (not (is-tier-over-max? tier new-tier-supply)) ERR-MAX-TIER-SUPPLY)
+                
+                (let (
+                    (token-id (var-get next-token-id))
+                    (recipient tx-sender)
                 )
-                ;; Check global max supply.
-                (if (> new-total MAX-SUPPLY)
-                    ERR-MAX-SUPPLY
-                    (let (
-                            (tier-row (default-to { supply: u0 } (map-get? tier-supplies { tier: tier })))
-                            (tier-supply (get supply tier-row))
-                            (new-tier-supply (+ tier-supply u1))
-                        )
-                        ;; Check per-tier max supply.
-                        (if (is-tier-over-max? tier new-tier-supply)
-                            ERR-MAX-TIER-SUPPLY
-                            (let (
-                                    (token-id (var-get next-token-id))
-                                    (recipient tx-sender)
-                                )
-                                (begin
-                                    ;; Write ownership and metadata.
-                                    (map-set token-owners { token-id: token-id } { owner: recipient })
-                                    (map-set token-metadata { token-id: token-id } {
-                                        tier: tier,
-                                        uri: uri,
-                                    })
-                                    ;; Update counters.
-                                    (map-set tier-supplies { tier: tier } { supply: new-tier-supply })
-                                    (var-set total-supply new-total)
-                                    (var-set next-token-id (+ token-id u1))
-                                    ;; Track user if new
-                                    (if (is-none (map-get? user-registry { user: recipient }))
-                                        (begin
-                                            (map-set user-registry { user: recipient } { active: true })
-                                            (var-set user-count (+ (var-get user-count) u1))
-                                        )
-                                        true
-                                    )
-                                    ;; Increment transaction count
-                                    (var-set transaction-count (+ (var-get transaction-count) u1))
-                                    ;; Emit mint event.
-                                    (print (tuple
-                                        (event "mint-event")
-                                        (token-id token-id)
-                                        (owner recipient)
-                                        (tier tier)
-                                    ))
-                                    (ok token-id)
-                                )
+                    (begin
+                        ;; Write ownership and metadata
+                        (map-set token-owners { token-id: token-id } { owner: recipient })
+                        (map-set token-metadata { token-id: token-id } {
+                            tier: tier,
+                            uri: uri,
+                        })
+                        
+                        ;; Update counters
+                        (map-set tier-supplies { tier: tier } { supply: new-tier-supply })
+                        (var-set total-supply new-total)
+                        (var-set next-token-id (+ token-id u1))
+                        
+                        ;; Track user if new
+                        (if (is-none (map-get? user-registry { user: recipient }))
+                            (begin
+                                (map-set user-registry { user: recipient } { active: true })
+                                (var-set user-count (+ (var-get user-count) u1))
                             )
+                            true
                         )
+                        
+                        ;; Increment transaction count
+                        (var-set transaction-count (+ (var-get transaction-count) u1))
+                        
+                        ;; Enhanced event emission
+                        (emit-token-event
+                            EVENT-TOKEN-MINTED
+                            token-id
+                            recipient
+                            (tuple (tier tier) (recipient (some recipient)) (from none) (to none))
+                        )
+                        
+                        (ok token-id)
                     )
                 )
             )
@@ -674,31 +680,49 @@
         (token-id uint)
         (recipient principal)
     )
-    (let ((owner-row (map-get? token-owners { token-id: token-id })))
-        (match owner-row
-            owner-data (let ((owner (get owner owner-data)))
-                (if (not (is-eq owner tx-sender))
-                    ERR-NOT-OWNER
-                    (if (var-get paused)
-                        ERR-PAUSED
-                        (if (is-eq owner recipient)
-                            ERR-SELF-TRANSFER
-                            (begin
-                                (map-set token-owners { token-id: token-id } { owner: recipient })
-                                ;; Emit transfer event.
-                                (print (tuple
-                                    (event "transfer-event")
-                                    (token-id token-id)
-                                    (from owner)
-                                    (to recipient)
-                                ))
-                                (ok true)
-                            )
+    (begin
+        ;; Enhanced security and validation checks
+        (try! (validate-security-checks tx-sender "transfer"))
+        (try! (validate-not-paused))
+        (asserts! (not (var-get transfer-paused)) ERR-FEATURE-DISABLED)
+        (try! (validate-token-id token-id))
+        (asserts! (not (is-eq tx-sender recipient)) ERR-SELF-TRANSFER)
+        
+        ;; Validate token ownership
+        (try! (validate-token-owner token-id tx-sender))
+        
+        ;; Check recipient is not blacklisted
+        (try! (check-blacklist recipient))
+        
+        (let ((owner-row (unwrap! (map-get? token-owners { token-id: token-id }) ERR-NOT-FOUND)))
+            (let ((owner (get owner owner-row)))
+                (begin
+                    ;; Perform transfer
+                    (map-set token-owners { token-id: token-id } { owner: recipient })
+                    
+                    ;; Track recipient if new user
+                    (if (is-none (map-get? user-registry { user: recipient }))
+                        (begin
+                            (map-set user-registry { user: recipient } { active: true })
+                            (var-set user-count (+ (var-get user-count) u1))
                         )
+                        true
                     )
+                    
+                    ;; Increment transaction count
+                    (var-set transaction-count (+ (var-get transaction-count) u1))
+                    
+                    ;; Enhanced event emission
+                    (emit-token-event
+                        EVENT-TOKEN-TRANSFERRED
+                        token-id
+                        tx-sender
+                        (tuple (tier u0) (recipient (some recipient)) (from (some owner)) (to (some recipient)))
+                    )
+                    
+                    (ok true)
                 )
             )
-            ERR-NOT-FOUND
         )
     )
 )
