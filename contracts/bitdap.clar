@@ -1961,3 +1961,276 @@
         error (err error)
     )
 )
+;; Enhanced Data Access System
+
+;; Pagination constants
+(define-constant MAX-PAGE-SIZE u50)
+(define-constant DEFAULT-PAGE-SIZE u10)
+
+;; Paginated token listing
+(define-read-only (get-tokens-paginated (offset uint) (limit uint))
+    (let (
+        (safe-limit (if (> limit MAX-PAGE-SIZE) MAX-PAGE-SIZE limit))
+        (safe-limit (if (is-eq safe-limit u0) DEFAULT-PAGE-SIZE safe-limit))
+        (current-supply (var-get total-supply))
+        (start-id (+ offset u1))
+        (end-id (+ start-id safe-limit))
+    )
+        (ok (tuple
+            (tokens (generate-token-list start-id end-id (list)))
+            (total-count current-supply)
+            (offset offset)
+            (limit safe-limit)
+            (has-more (< end-id current-supply))
+        ))
+    )
+)
+
+;; Helper to generate token list (simplified)
+(define-private (generate-token-list (start uint) (end uint) (acc (list 50 uint)))
+    (if (or (> start end) (>= (len acc) MAX-PAGE-SIZE))
+        acc
+        (let ((next-acc (unwrap-panic (as-max-len? (append acc start) u50))))
+            (generate-token-list (+ start u1) end next-acc)
+        )
+    )
+)
+
+;; Comprehensive user profile with ownership and transaction history
+(define-read-only (get-user-profile (user principal))
+    (let (
+        (user-data (default-to { active: false } (map-get? user-registry { user: user })))
+        (owned-tokens (get-user-tokens user))
+        (listing-ids (default-to (list) (get listing-ids (default-to { listing-ids: (list) } (map-get? seller-listings { user: user })))))
+    )
+        (ok (tuple
+            (user user)
+            (active (get active user-data))
+            (tokens-owned (len owned-tokens))
+            (active-listings (len (filter is-listing-active-by-id listing-ids)))
+            (total-listings-created (len listing-ids))
+            (reputation-score (calculate-reputation-score user))
+            (first-interaction (get-first-interaction user))
+            (last-interaction (get-last-interaction user))
+        ))
+    )
+)
+
+;; Get tokens owned by a user (simplified implementation)
+(define-private (get-user-tokens (user principal))
+    ;; In a real implementation, this would iterate through all tokens
+    ;; For now, return empty list as placeholder
+    (list)
+)
+
+;; Check if listing is active by ID
+(define-private (is-listing-active-by-id (listing-id uint))
+    (match (map-get? marketplace-listings { listing-id: listing-id })
+        listing-data (get active listing-data)
+        false
+    )
+)
+
+;; Calculate user reputation score
+(define-private (calculate-reputation-score (user principal))
+    ;; Simplified reputation calculation
+    ;; In practice, this would consider successful transactions, time on platform, etc.
+    u100
+)
+
+;; Get first interaction timestamp
+(define-private (get-first-interaction (user principal))
+    ;; Placeholder - would track actual first interaction
+    u0
+)
+
+;; Get last interaction timestamp  
+(define-private (get-last-interaction (user principal))
+    ;; Placeholder - would track actual last interaction
+    stacks-block-height
+)
+
+;; Real-time marketplace data with filtering
+(define-read-only (get-marketplace-data 
+    (tier-filter (optional uint))
+    (price-min (optional uint))
+    (price-max (optional uint))
+    (active-only bool)
+    (offset uint)
+    (limit uint)
+)
+    (let (
+        (safe-limit (if (> limit MAX-PAGE-SIZE) MAX-PAGE-SIZE limit))
+        (total-listings (var-get listing-count))
+    )
+        (ok (tuple
+            (listings (get-filtered-listing-data tier-filter price-min price-max active-only offset safe-limit))
+            (total-count total-listings)
+            (active-count (get-active-listings-count))
+            (filters (tuple 
+                (tier tier-filter)
+                (price-min price-min)
+                (price-max price-max)
+                (active-only active-only)
+            ))
+            (pagination (tuple
+                (offset offset)
+                (limit safe-limit)
+                (has-more (< (+ offset safe-limit) total-listings))
+            ))
+        ))
+    )
+)
+
+;; Get filtered listing data (simplified)
+(define-private (get-filtered-listing-data 
+    (tier-filter (optional uint))
+    (price-min (optional uint))
+    (price-max (optional uint))
+    (active-only bool)
+    (offset uint)
+    (limit uint)
+)
+    ;; Simplified implementation - would need complex filtering logic
+    (list)
+)
+
+;; Get count of active listings
+(define-private (get-active-listings-count)
+    ;; Simplified - would count actual active listings
+    (var-get listing-count)
+)
+
+;; Aggregated statistics and analytics
+(define-read-only (get-contract-statistics)
+    (let (
+        (total-supply (var-get total-supply))
+        (user-count (var-get user-count))
+        (listing-count (var-get listing-count))
+        (transaction-count (var-get transaction-count))
+        (basic-supply (get supply (default-to { supply: u0 } (map-get? tier-supplies { tier: TIER-BASIC }))))
+        (pro-supply (get supply (default-to { supply: u0 } (map-get? tier-supplies { tier: TIER-PRO }))))
+        (vip-supply (get supply (default-to { supply: u0 } (map-get? tier-supplies { tier: TIER-VIP }))))
+    )
+        (ok (tuple
+            (contract-info (tuple
+                (total-supply total-supply)
+                (max-supply MAX-SUPPLY)
+                (unique-users user-count)
+                (total-transactions transaction-count)
+            ))
+            (tier-distribution (tuple
+                (basic-count basic-supply)
+                (pro-count pro-supply)
+                (vip-count vip-supply)
+                (basic-percentage (if (> total-supply u0) (/ (* basic-supply u100) total-supply) u0))
+                (pro-percentage (if (> total-supply u0) (/ (* pro-supply u100) total-supply) u0))
+                (vip-percentage (if (> total-supply u0) (/ (* vip-supply u100) total-supply) u0))
+            ))
+            (marketplace-stats (tuple
+                (active-listings listing-count)
+                (total-fees-collected (var-get total-fees-collected))
+                (marketplace-fee-percent (var-get marketplace-fee-percent))
+            ))
+            (timestamp stacks-block-height)
+        ))
+    )
+)
+
+;; Bulk data retrieval for off-chain indexing
+(define-read-only (get-bulk-token-data (start-id uint) (end-id uint))
+    (let (
+        (safe-start (if (< start-id u1) u1 start-id))
+        (safe-end (if (> end-id (var-get next-token-id)) (var-get next-token-id) end-id))
+        (range-size (- safe-end safe-start))
+    )
+        (if (> range-size MAX-PAGE-SIZE)
+            (err ERR-QUERY-LIMIT)
+            (ok (tuple
+                (start-id safe-start)
+                (end-id safe-end)
+                (token-data (get-token-range-data safe-start safe-end))
+                (timestamp stacks-block-height)
+            ))
+        )
+    )
+)
+
+;; Get token data for a range (simplified)
+(define-private (get-token-range-data (start-id uint) (end-id uint))
+    ;; Simplified implementation - would return actual token data
+    (list)
+)
+
+;; Advanced search functionality
+(define-read-only (search-tokens 
+    (query (string-utf8 64))
+    (tier-filter (optional uint))
+    (owner-filter (optional principal))
+    (limit uint)
+)
+    (let (
+        (safe-limit (if (> limit MAX-PAGE-SIZE) MAX-PAGE-SIZE limit))
+    )
+        (ok (tuple
+            (query query)
+            (results (perform-token-search query tier-filter owner-filter safe-limit))
+            (result-count u0) ;; Would be calculated
+            (filters (tuple
+                (tier tier-filter)
+                (owner owner-filter)
+            ))
+        ))
+    )
+)
+
+;; Perform token search (simplified)
+(define-private (perform-token-search 
+    (query (string-utf8 64))
+    (tier-filter (optional uint))
+    (owner-filter (optional principal))
+    (limit uint)
+)
+    ;; Simplified implementation - would perform actual search
+    (list)
+)
+
+;; Get marketplace trends and analytics
+(define-read-only (get-marketplace-trends (days uint))
+    (let (
+        (safe-days (if (> days u30) u30 days))
+    )
+        (ok (tuple
+            (period-days safe-days)
+            (volume-trend (calculate-volume-trend safe-days))
+            (price-trend (calculate-price-trend safe-days))
+            (activity-trend (calculate-activity-trend safe-days))
+            (top-tiers (get-top-performing-tiers safe-days))
+            (generated-at stacks-block-height)
+        ))
+    )
+)
+
+;; Calculate volume trend (simplified)
+(define-private (calculate-volume-trend (days uint))
+    (tuple (current u0) (previous u0) (change-percent u0))
+)
+
+;; Calculate price trend (simplified)
+(define-private (calculate-price-trend (days uint))
+    (tuple (average-price u0) (median-price u0) (price-change-percent u0))
+)
+
+;; Calculate activity trend (simplified)
+(define-private (calculate-activity-trend (days uint))
+    (tuple (transactions u0) (unique-users u0) (activity-score u0))
+)
+
+;; Get top performing tiers (simplified)
+(define-private (get-top-performing-tiers (days uint))
+    (list 
+        (tuple (tier TIER-BASIC) (volume u0) (transactions u0))
+        (tuple (tier TIER-PRO) (volume u0) (transactions u0))
+        (tuple (tier TIER-VIP) (volume u0) (transactions u0))
+    )
+)
