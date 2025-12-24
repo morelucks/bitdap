@@ -31,18 +31,130 @@
 ;; constants
 ;; - Collection-wide configuration, tier identifiers, and error codes.
 
-;; Error codes
+;; Enhanced Error Handling System
+;; Error codes are categorized for better debugging and user experience
+
+;; Validation Errors (100-199) - Input validation failures
 (define-constant ERR-INVALID-TIER (err u100))
-(define-constant ERR-NOT-FOUND (err u101))
-(define-constant ERR-NOT-OWNER (err u102))
-(define-constant ERR-SELF-TRANSFER (err u103))
-(define-constant ERR-MAX-SUPPLY (err u104))
-(define-constant ERR-MAX-TIER-SUPPLY (err u105))
-(define-constant ERR-UNAUTHORIZED (err u106))
-(define-constant ERR-PAUSED (err u107))
-(define-constant ERR-LISTING-NOT-FOUND (err u108))
-(define-constant ERR-INVALID-PRICE (err u109))
-(define-constant ERR-LISTING-EXPIRED (err u110))
+(define-constant ERR-INVALID-TOKEN-ID (err u101))
+(define-constant ERR-INVALID-PRICE (err u102))
+(define-constant ERR-INVALID-AMOUNT (err u103))
+(define-constant ERR-INVALID-RECIPIENT (err u104))
+(define-constant ERR-INVALID-URI (err u105))
+(define-constant ERR-INVALID-EXPIRY (err u106))
+(define-constant ERR-INVALID-BATCH-SIZE (err u107))
+(define-constant ERR-INVALID-PAGINATION (err u108))
+(define-constant ERR-INVALID-FILTER (err u109))
+(define-constant ERR-SELF-TRANSFER (err u110))
+
+;; Authorization Errors (200-299) - Permission and access control failures
+(define-constant ERR-UNAUTHORIZED (err u200))
+(define-constant ERR-NOT-OWNER (err u201))
+(define-constant ERR-NOT-ADMIN (err u202))
+(define-constant ERR-NOT-SELLER (err u203))
+(define-constant ERR-NOT-BUYER (err u204))
+(define-constant ERR-INSUFFICIENT-PERMISSIONS (err u205))
+(define-constant ERR-BLACKLISTED (err u206))
+(define-constant ERR-RATE_LIMITED (err u207))
+
+;; Business Logic Errors (300-399) - Business rule violations
+(define-constant ERR-NOT-FOUND (err u300))
+(define-constant ERR-ALREADY-EXISTS (err u301))
+(define-constant ERR-LISTING-NOT-FOUND (err u302))
+(define-constant ERR-LISTING-EXPIRED (err u303))
+(define-constant ERR-LISTING-INACTIVE (err u304))
+(define-constant ERR-OFFER-NOT-FOUND (err u305))
+(define-constant ERR-OFFER-EXPIRED (err u306))
+(define-constant ERR-INSUFFICIENT-BALANCE (err u307))
+(define-constant ERR-INSUFFICIENT-ALLOWANCE (err u308))
+(define-constant ERR-DUPLICATE-OPERATION (err u309))
+
+;; Resource Errors (400-499) - Capacity and limit violations
+(define-constant ERR-MAX-SUPPLY (err u400))
+(define-constant ERR-MAX-TIER-SUPPLY (err u401))
+(define-constant ERR-MAX-LISTINGS (err u402))
+(define-constant ERR-MAX-OFFERS (err u403))
+(define-constant ERR-MAX-BATCH-SIZE (err u404))
+(define-constant ERR-STORAGE-LIMIT (err u405))
+(define-constant ERR-QUERY-LIMIT (err u406))
+
+;; System Errors (500-599) - Internal system failures
+(define-constant ERR-PAUSED (err u500))
+(define-constant ERR-MARKETPLACE-PAUSED (err u501))
+(define-constant ERR-FEATURE-DISABLED (err u502))
+(define-constant ERR-MAINTENANCE-MODE (err u503))
+(define-constant ERR-INTERNAL-ERROR (err u504))
+(define-constant ERR-OVERFLOW (err u505))
+(define-constant ERR-UNDERFLOW (err u506))
+
+;; Marketplace Errors (600-699) - Marketplace-specific failures
+(define-constant ERR-LISTING-PRICE-TOO-LOW (err u600))
+(define-constant ERR-LISTING-PRICE-TOO-HIGH (err u601))
+(define-constant ERR-RESERVE-NOT-MET (err u602))
+(define-constant ERR-AUCTION-ACTIVE (err u603))
+(define-constant ERR-AUCTION-ENDED (err u604))
+(define-constant ERR-BID-TOO-LOW (err u605))
+(define-constant ERR-PAYMENT-FAILED (err u606))
+(define-constant ERR-ESCROW-FAILED (err u607))
+
+;; Error message mapping for human-readable descriptions
+(define-map error-messages
+    { error-code: uint }
+    { 
+        category: (string-ascii 16),
+        message: (string-utf8 256),
+        suggestion: (string-utf8 256)
+    }
+)
+
+;; Initialize error messages
+(map-set error-messages { error-code: u100 } {
+    category: "validation",
+    message: u"Invalid tier specified. Must be 1 (Basic), 2 (Pro), or 3 (VIP)",
+    suggestion: u"Use TIER-BASIC, TIER-PRO, or TIER-VIP constants"
+})
+
+(map-set error-messages { error-code: u101 } {
+    category: "validation", 
+    message: u"Invalid token ID provided",
+    suggestion: u"Ensure token ID exists and is greater than 0"
+})
+
+(map-set error-messages { error-code: u102 } {
+    category: "validation",
+    message: u"Invalid price specified. Must be greater than 0",
+    suggestion: u"Set a positive price value in microSTX"
+})
+
+(map-set error-messages { error-code: u200 } {
+    category: "authorization",
+    message: u"Unauthorized access. Caller lacks required permissions",
+    suggestion: u"Ensure you have the necessary role or ownership"
+})
+
+(map-set error-messages { error-code: u201 } {
+    category: "authorization",
+    message: u"Not the owner of this token",
+    suggestion: u"Only token owners can perform this operation"
+})
+
+(map-set error-messages { error-code: u300 } {
+    category: "business-logic",
+    message: u"Requested resource not found",
+    suggestion: u"Verify the resource exists and try again"
+})
+
+(map-set error-messages { error-code: u400 } {
+    category: "resource",
+    message: u"Maximum supply limit reached",
+    suggestion: u"No more tokens can be minted"
+})
+
+(map-set error-messages { error-code: u500 } {
+    category: "system",
+    message: u"Contract is currently paused",
+    suggestion: u"Wait for contract to be unpaused by administrator"
+})
 
 ;; Tiers are represented as uints for compact on-chain storage.
 (define-constant TIER-BASIC u1)
@@ -85,6 +197,69 @@
 
 ;; Counter for total transactions (mints, transfers, burns)
 (define-data-var transaction-count uint u0)
+
+;; Enhanced Error Handling Helper Functions
+
+;; Get error message details for a given error code
+(define-read-only (get-error-message (error-code uint))
+    (match (map-get? error-messages { error-code: error-code })
+        error-data (ok error-data)
+        (err u504) ;; Internal error if error message not found
+    )
+)
+
+;; Validate input parameters with specific error codes
+(define-private (validate-tier (tier uint))
+    (if (or (is-eq tier TIER-BASIC) (or (is-eq tier TIER-PRO) (is-eq tier TIER-VIP)))
+        (ok true)
+        ERR-INVALID-TIER
+    )
+)
+
+(define-private (validate-token-id (token-id uint))
+    (if (> token-id u0)
+        (ok true)
+        ERR-INVALID-TOKEN-ID
+    )
+)
+
+(define-private (validate-price (price uint))
+    (if (> price u0)
+        (ok true)
+        ERR-INVALID-PRICE
+    )
+)
+
+(define-private (validate-not-paused)
+    (if (var-get paused)
+        ERR-PAUSED
+        (ok true)
+    )
+)
+
+(define-private (validate-marketplace-not-paused)
+    (if (var-get marketplace-paused)
+        ERR-MARKETPLACE-PAUSED
+        (ok true)
+    )
+)
+
+(define-private (validate-admin (caller principal))
+    (if (is-eq caller (var-get contract-owner))
+        (ok true)
+        ERR-NOT-ADMIN
+    )
+)
+
+(define-private (validate-token-owner (token-id uint) (caller principal))
+    (match (map-get? token-owners { token-id: token-id })
+        owner-data (if (is-eq (get owner owner-data) caller)
+            (ok true)
+            ERR-NOT-OWNER
+        )
+        ERR-NOT-FOUND
+    )
+)
 
 ;; data maps
 ;; - Storage for token ownership, metadata, and per-tier supply.
