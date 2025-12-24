@@ -382,17 +382,68 @@
     { active: bool }
 )
 
-;; listing-id -> listing details
+;; Enhanced listing-id -> listing details with advanced features
 (define-map marketplace-listings
     { listing-id: uint }
     {
         token-id: uint,
         seller: principal,
         price: uint,
+        reserve-price: (optional uint),
+        expiry-block: (optional uint),
+        listing-type: (string-ascii 16), ;; "fixed", "auction", "offer"
         created-at: uint,
-        active: bool
+        updated-at: uint,
+        active: bool,
+        view-count: uint
     }
 )
+
+;; offer-id -> offer details for marketplace offers
+(define-map marketplace-offers
+    { offer-id: uint }
+    {
+        listing-id: uint,
+        token-id: uint,
+        bidder: principal,
+        amount: uint,
+        expiry-block: uint,
+        created-at: uint,
+        status: (string-ascii 16) ;; "active", "accepted", "rejected", "expired"
+    }
+)
+
+;; Advanced marketplace analytics
+(define-map marketplace-analytics
+    { period: (string-ascii 16) } ;; "daily", "weekly", "monthly"
+    {
+        total-volume: uint,
+        total-sales: uint,
+        average-price: uint,
+        unique-buyers: uint,
+        unique-sellers: uint,
+        last-updated: uint
+    }
+)
+
+;; Price history for tokens
+(define-map price-history
+    { token-id: uint, sale-id: uint }
+    {
+        price: uint,
+        seller: principal,
+        buyer: principal,
+        sale-date: uint,
+        listing-type: (string-ascii 16)
+    }
+)
+
+;; Marketplace configuration
+(define-data-var next-offer-id uint u1)
+(define-data-var next-sale-id uint u1)
+(define-data-var min-listing-price uint u1000) ;; 0.001 STX
+(define-data-var max-listing-price uint u1000000000) ;; 1000 STX
+(define-data-var offer-expiry-blocks uint u1008) ;; ~1 week
 
 ;; buyer -> listing-id -> purchase record
 (define-map purchase-history
@@ -859,8 +910,13 @@
                                 token-id: token-id,
                                 seller: tx-sender,
                                 price: price,
+                                reserve-price: none,
+                                expiry-block: (some expiry-block),
+                                listing-type: "fixed",
                                 created-at: current-block,
-                                active: true
+                                updated-at: current-block,
+                                active: true,
+                                view-count: u0
                             })
                             ;; Track seller listings
                             (let ((seller-row (default-to { listing-ids: (list) } (map-get? seller-listings { seller: tx-sender }))))
@@ -920,8 +976,13 @@
                                     token-id: token-id,
                                     seller: seller,
                                     price: price,
+                                    reserve-price: (get reserve-price listing-data),
+                                    expiry-block: (get expiry-block listing-data),
+                                    listing-type: (get listing-type listing-data),
                                     created-at: (get created-at listing-data),
-                                    active: false
+                                    updated-at: stacks-block-height,
+                                    active: false,
+                                    view-count: (get view-count listing-data)
                                 })
                                 ;; Record purchase
                                 (map-set purchase-history { buyer: tx-sender, listing-id: listing-id } {
@@ -1130,8 +1191,13 @@
                     token-id: (get token-id listing-data),
                     seller: (get seller listing-data),
                     price: new-price,
+                    reserve-price: (get reserve-price listing-data),
+                    expiry-block: (get expiry-block listing-data),
+                    listing-type: (get listing-type listing-data),
                     created-at: (get created-at listing-data),
-                    active: (get active listing-data)
+                    updated-at: stacks-block-height,
+                    active: (get active listing-data),
+                    view-count: (get view-count listing-data)
                 })
             )
                 (begin
@@ -1168,8 +1234,13 @@
                     token-id: (get token-id listing-data),
                     seller: (get seller listing-data),
                     price: (get price listing-data),
+                    reserve-price: (get reserve-price listing-data),
+                    expiry-block: (get expiry-block listing-data),
+                    listing-type: (get listing-type listing-data),
                     created-at: (get created-at listing-data),
-                    active: false
+                    updated-at: stacks-block-height,
+                    active: false,
+                    view-count: (get view-count listing-data)
                 })
             )
                 (begin
@@ -1364,5 +1435,233 @@
     (match (map-get? purchase-history { buyer: buyer, listing-id: listing-id })
         purchase-data (ok purchase-data)
         ERR-NOT-FOUND
+    )
+)
+;; Advanced Marketplace Features
+
+;; Create an offer on a listing
+(define-public (create-offer (listing-id uint) (amount uint) (expiry-blocks uint))
+    (begin
+        (try! (validate-security-checks tx-sender "create-offer"))
+        (try! (validate-marketplace-not-paused))
+        (try! (validate-price amount))
+        (asserts! (> expiry-blocks u0) ERR-INVALID-EXPIRY)
+        
+        (match (map-get? marketplace-listings { listing-id: listing-id })
+            listing-data (let (
+                (offer-id (var-get next-offer-id))
+                (current-block stacks-block-height)
+                (expiry-block (+ current-block expiry-blocks))
+            )
+                (begin
+                    (asserts! (get active listing-data) ERR-LISTING-INACTIVE)
+                    (asserts! (not (is-eq (get seller listing-data) tx-sender)) ERR-SELF-TRANSFER)
+                    
+                    ;; Create offer
+                    (map-set marketplace-offers { offer-id: offer-id } {
+                        listing-id: listing-id,
+                        token-id: (get token-id listing-data),
+                        bidder: tx-sender,
+                        amount: amount,
+                        expiry-block: expiry-block,
+                        created-at: current-block,
+                        status: "active"
+                    })
+                    
+                    (var-set next-offer-id (+ offer-id u1))
+                    
+                    ;; Emit offer event
+                    (emit-marketplace-event
+                        EVENT-OFFER-CREATED
+                        (some listing-id)
+                        (some (get token-id listing-data))
+                        tx-sender
+                        (tuple (price (some amount)) (seller (some (get seller listing-data))) (buyer (some tx-sender)) (fee none))
+                    )
+                    
+                    (ok offer-id)
+                )
+            )
+            ERR-LISTING-NOT-FOUND
+        )
+    )
+)
+
+;; Accept an offer (seller only)
+(define-public (accept-offer (offer-id uint))
+    (begin
+        (try! (validate-marketplace-not-paused))
+        
+        (match (map-get? marketplace-offers { offer-id: offer-id })
+            offer-data (let (
+                (listing-id (get listing-id offer-data))
+                (token-id (get token-id offer-data))
+                (bidder (get bidder offer-data))
+                (amount (get amount offer-data))
+                (expiry-block (get expiry-block offer-data))
+            )
+                (begin
+                    (asserts! (is-eq (get status offer-data) "active") ERR-OFFER-NOT-FOUND)
+                    (asserts! (<= stacks-block-height expiry-block) ERR-OFFER-EXPIRED)
+                    
+                    ;; Validate seller owns the listing
+                    (try! (validate-listing-owner listing-id tx-sender))
+                    
+                    ;; Transfer token to bidder
+                    (map-set token-owners { token-id: token-id } { owner: bidder })
+                    
+                    ;; Update offer status
+                    (map-set marketplace-offers { offer-id: offer-id } {
+                        listing-id: listing-id,
+                        token-id: token-id,
+                        bidder: bidder,
+                        amount: amount,
+                        expiry-block: expiry-block,
+                        created-at: (get created-at offer-data),
+                        status: "accepted"
+                    })
+                    
+                    ;; Deactivate listing
+                    (match (map-get? marketplace-listings { listing-id: listing-id })
+                        listing-data (map-set marketplace-listings { listing-id: listing-id } {
+                            token-id: (get token-id listing-data),
+                            seller: (get seller listing-data),
+                            price: (get price listing-data),
+                            reserve-price: (get reserve-price listing-data),
+                            expiry-block: (get expiry-block listing-data),
+                            listing-type: (get listing-type listing-data),
+                            created-at: (get created-at listing-data),
+                            updated-at: stacks-block-height,
+                            active: false,
+                            view-count: (get view-count listing-data)
+                        })
+                        false
+                    )
+                    
+                    ;; Record sale in price history
+                    (let ((sale-id (var-get next-sale-id)))
+                        (map-set price-history { token-id: token-id, sale-id: sale-id } {
+                            price: amount,
+                            seller: tx-sender,
+                            buyer: bidder,
+                            sale-date: stacks-block-height,
+                            listing-type: "offer"
+                        })
+                        (var-set next-sale-id (+ sale-id u1))
+                    )
+                    
+                    ;; Emit acceptance event
+                    (emit-marketplace-event
+                        EVENT-OFFER-ACCEPTED
+                        (some listing-id)
+                        (some token-id)
+                        tx-sender
+                        (tuple (price (some amount)) (seller (some tx-sender)) (buyer (some bidder)) (fee none))
+                    )
+                    
+                    (ok true)
+                )
+            )
+            ERR-OFFER-NOT-FOUND
+        )
+    )
+)
+
+;; Get marketplace analytics
+(define-read-only (get-marketplace-analytics (period (string-ascii 16)))
+    (match (map-get? marketplace-analytics { period: period })
+        analytics-data (ok analytics-data)
+        (ok (tuple
+            (total-volume u0)
+            (total-sales u0)
+            (average-price u0)
+            (unique-buyers u0)
+            (unique-sellers u0)
+            (last-updated u0)
+        ))
+    )
+)
+
+;; Get price history for a token
+(define-read-only (get-token-price-history (token-id uint) (limit uint))
+    (let (
+        (max-limit (if (> limit u10) u10 limit))
+        (sale-id (var-get next-sale-id))
+    )
+        ;; This is a simplified version - in practice you'd want pagination
+        (ok (list))
+    )
+)
+
+;; Filter listings by criteria
+(define-read-only (get-filtered-listings 
+    (tier-filter (optional uint))
+    (min-price (optional uint))
+    (max-price (optional uint))
+    (listing-type-filter (optional (string-ascii 16)))
+    (limit uint)
+)
+    ;; Simplified implementation - would need more complex filtering logic
+    (ok (list))
+)
+
+;; Admin function to update marketplace analytics
+(define-public (update-marketplace-analytics (period (string-ascii 16)))
+    (begin
+        (try! (validate-admin tx-sender))
+        
+        ;; This would calculate real analytics in practice
+        (map-set marketplace-analytics { period: period } {
+            total-volume: u0,
+            total-sales: u0,
+            average-price: u0,
+            unique-buyers: u0,
+            unique-sellers: u0,
+            last-updated: stacks-block-height
+        })
+        
+        (emit-admin-event
+            EVENT-CONFIG-UPDATED
+            tx-sender
+            "update-analytics"
+            (tuple (old-value none) (new-value none) (target none))
+        )
+        
+        (ok true)
+    )
+)
+
+;; Admin function to set marketplace configuration
+(define-public (set-marketplace-config 
+    (min-price (optional uint))
+    (max-price (optional uint))
+    (offer-expiry (optional uint))
+)
+    (begin
+        (try! (validate-admin tx-sender))
+        
+        (match min-price
+            price (var-set min-listing-price price)
+            true
+        )
+        
+        (match max-price
+            price (var-set max-listing-price price)
+            true
+        )
+        
+        (match offer-expiry
+            expiry (var-set offer-expiry-blocks expiry)
+            true
+        )
+        
+        (emit-admin-event
+            EVENT-CONFIG-UPDATED
+            tx-sender
+            "marketplace-config"
+            (tuple (old-value none) (new-value none) (target none))
+        )
+        
+        (ok true)
     )
 )
