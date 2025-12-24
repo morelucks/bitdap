@@ -261,6 +261,97 @@
     )
 )
 
+;; Enhanced Event System
+
+;; Event types for structured logging
+(define-constant EVENT-TOKEN-MINTED "token-minted")
+(define-constant EVENT-TOKEN-TRANSFERRED "token-transferred") 
+(define-constant EVENT-TOKEN-BURNED "token-burned")
+(define-constant EVENT-LISTING-CREATED "listing-created")
+(define-constant EVENT-LISTING-UPDATED "listing-updated")
+(define-constant EVENT-LISTING-CANCELLED "listing-cancelled")
+(define-constant EVENT-PURCHASE-COMPLETED "purchase-completed")
+(define-constant EVENT-OFFER-CREATED "offer-created")
+(define-constant EVENT-OFFER-ACCEPTED "offer-accepted")
+(define-constant EVENT-OFFER-REJECTED "offer-rejected")
+(define-constant EVENT-ADMIN-ACTION "admin-action")
+(define-constant EVENT-CONFIG-UPDATED "config-updated")
+(define-constant EVENT-PAUSE-STATE-CHANGED "pause-state-changed")
+(define-constant EVENT-BATCH-OPERATION "batch-operation")
+
+;; Enhanced event emission functions with standardized metadata
+(define-private (emit-token-event 
+    (event-type (string-ascii 32))
+    (token-id uint)
+    (actor principal)
+    (data (tuple (tier uint) (recipient (optional principal)) (from (optional principal)) (to (optional principal))))
+)
+    (print (tuple
+        (event-type event-type)
+        (timestamp stacks-block-height)
+        (block-height stacks-block-height)
+        (transaction-id tx-sender)
+        (actor actor)
+        (token-id token-id)
+        (data data)
+    ))
+)
+
+(define-private (emit-marketplace-event
+    (event-type (string-ascii 32))
+    (listing-id (optional uint))
+    (token-id (optional uint))
+    (actor principal)
+    (data (tuple (price (optional uint)) (seller (optional principal)) (buyer (optional principal)) (fee (optional uint))))
+)
+    (print (tuple
+        (event-type event-type)
+        (timestamp stacks-block-height)
+        (block-height stacks-block-height)
+        (transaction-id tx-sender)
+        (actor actor)
+        (listing-id listing-id)
+        (token-id token-id)
+        (data data)
+    ))
+)
+
+(define-private (emit-admin-event
+    (event-type (string-ascii 32))
+    (admin principal)
+    (action (string-ascii 32))
+    (data (tuple (old-value (optional uint)) (new-value (optional uint)) (target (optional principal))))
+)
+    (print (tuple
+        (event-type event-type)
+        (timestamp stacks-block-height)
+        (block-height stacks-block-height)
+        (transaction-id tx-sender)
+        (actor admin)
+        (action action)
+        (data data)
+    ))
+)
+
+(define-private (emit-batch-event
+    (event-type (string-ascii 32))
+    (actor principal)
+    (operation-count uint)
+    (success-count uint)
+    (data (tuple (operation-type (string-ascii 32)) (details (optional (string-utf8 256)))))
+)
+    (print (tuple
+        (event-type event-type)
+        (timestamp stacks-block-height)
+        (block-height stacks-block-height)
+        (transaction-id tx-sender)
+        (actor actor)
+        (operation-count operation-count)
+        (success-count success-count)
+        (data data)
+    ))
+)
+
 ;; data maps
 ;; - Storage for token ownership, metadata, and per-tier supply.
 
