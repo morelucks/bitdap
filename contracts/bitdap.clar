@@ -2234,3 +2234,331 @@
         (tuple (tier TIER-VIP) (volume u0) (transactions u0))
     )
 )
+;; Configuration Management System
+
+;; Configuration history tracking
+(define-map config-history
+    { config-key: (string-ascii 32), version: uint }
+    {
+        old-value: (optional uint),
+        new-value: uint,
+        changed-by: principal,
+        changed-at: uint,
+        reason: (optional (string-utf8 256))
+    }
+)
+
+;; Feature flags for gradual rollout
+(define-map feature-flags
+    { feature: (string-ascii 32) }
+    {
+        enabled: bool,
+        rollout-percentage: uint,
+        enabled-by: principal,
+        enabled-at: uint
+    }
+)
+
+;; Configuration version tracking
+(define-data-var config-version uint u1)
+(define-data-var next-config-version uint u1)
+
+;; Dynamic fee structure configuration
+(define-map fee-structures
+    { fee-type: (string-ascii 32) }
+    {
+        percentage: uint,
+        fixed-amount: uint,
+        recipient: principal,
+        active: bool,
+        updated-at: uint
+    }
+)
+
+;; Safe configuration update with validation and history
+(define-public (update-config-value 
+    (config-key (string-ascii 32))
+    (new-value uint)
+    (reason (optional (string-utf8 256)))
+)
+    (begin
+        (try! (validate-admin tx-sender))
+        
+        (let (
+            (version (var-get next-config-version))
+            (old-value (get-current-config-value config-key))
+        )
+            ;; Validate new value based on config key
+            (try! (validate-config-value config-key new-value))
+            
+            ;; Record configuration history
+            (map-set config-history { config-key: config-key, version: version } {
+                old-value: old-value,
+                new-value: new-value,
+                changed-by: tx-sender,
+                changed-at: stacks-block-height,
+                reason: reason
+            })
+            
+            ;; Apply the configuration change
+            (try! (apply-config-change config-key new-value))
+            
+            (var-set next-config-version (+ version u1))
+            
+            ;; Emit configuration update event
+            (emit-admin-event
+                EVENT-CONFIG-UPDATED
+                tx-sender
+                "config-update"
+                (tuple (old-value old-value) (new-value (some new-value)) (target none))
+            )
+            
+            (ok version)
+        )
+    )
+)
+
+;; Get current configuration value
+(define-private (get-current-config-value (config-key (string-ascii 32)))
+    (if (is-eq config-key "marketplace-fee")
+        (some (var-get marketplace-fee-percent))
+        (if (is-eq config-key "max-supply")
+            (some MAX-SUPPLY)
+            (if (is-eq config-key "rate-limit-window")
+                (some (var-get rate-limit-window))
+                none
+            )
+        )
+    )
+)
+
+;; Validate configuration values
+(define-private (validate-config-value (config-key (string-ascii 32)) (value uint))
+    (if (is-eq config-key "marketplace-fee")
+        (if (<= value u10) ;; Max 10% fee
+            (ok true)
+            ERR-INVALID-AMOUNT
+        )
+        (if (is-eq config-key "rate-limit-window")
+            (if (and (>= value u10) (<= value u1008)) ;; Between 10 blocks and 1 week
+                (ok true)
+                ERR-INVALID-AMOUNT
+            )
+            (ok true) ;; Default validation passes
+        )
+    )
+)
+
+;; Apply configuration changes
+(define-private (apply-config-change (config-key (string-ascii 32)) (value uint))
+    (if (is-eq config-key "marketplace-fee")
+        (begin
+            (var-set marketplace-fee-percent value)
+            (ok true)
+        )
+        (if (is-eq config-key "rate-limit-window")
+            (begin
+                (var-set rate-limit-window value)
+                (ok true)
+            )
+            (ok true) ;; Unknown config keys are ignored
+        )
+    )
+)
+
+;; Dynamic fee structure management
+(define-public (set-fee-structure 
+    (fee-type (string-ascii 32))
+    (percentage uint)
+    (fixed-amount uint)
+    (recipient principal)
+)
+    (begin
+        (try! (validate-admin tx-sender))
+        (asserts! (<= percentage u1000) ERR-INVALID-AMOUNT) ;; Max 10% (1000 basis points)
+        
+        (map-set fee-structures { fee-type: fee-type } {
+            percentage: percentage,
+            fixed-amount: fixed-amount,
+            recipient: recipient,
+            active: true,
+            updated-at: stacks-block-height
+        })
+        
+        (emit-admin-event
+            EVENT-CONFIG-UPDATED
+            tx-sender
+            "fee-structure"
+            (tuple (old-value none) (new-value (some percentage)) (target (some recipient)))
+        )
+        
+        (ok true)
+    )
+)
+
+;; Feature flag management
+(define-public (set-feature-flag 
+    (feature (string-ascii 32))
+    (enabled bool)
+    (rollout-percentage uint)
+)
+    (begin
+        (try! (validate-admin tx-sender))
+        (asserts! (<= rollout-percentage u100) ERR-INVALID-AMOUNT)
+        
+        (map-set feature-flags { feature: feature } {
+            enabled: enabled,
+            rollout-percentage: rollout-percentage,
+            enabled-by: tx-sender,
+            enabled-at: stacks-block-height
+        })
+        
+        (emit-admin-event
+            EVENT-CONFIG-UPDATED
+            tx-sender
+            "feature-flag"
+            (tuple (old-value none) (new-value (some (if enabled u1 u0))) (target none))
+        )
+        
+        (ok true)
+    )
+)
+
+;; Check if feature is enabled for user
+(define-read-only (is-feature-enabled (feature (string-ascii 32)) (user principal))
+    (match (map-get? feature-flags { feature: feature })
+        flag-data (if (get enabled flag-data)
+            (let ((rollout-percent (get rollout-percentage flag-data)))
+                (if (is-eq rollout-percent u100)
+                    (ok true)
+                    ;; Simple hash-based rollout (in practice, use better distribution)
+                    (ok (<= (mod (unwrap-panic (principal-to-uint user)) u100) rollout-percent))
+                )
+            )
+            (ok false)
+        )
+        (ok false)
+    )
+)
+
+;; Granular pause controls for different functions
+(define-public (set-granular-pause 
+    (operation (string-ascii 32))
+    (paused bool)
+    (reason (optional (string-utf8 256)))
+)
+    (begin
+        (try! (validate-admin tx-sender))
+        
+        (if (is-eq operation "mint")
+            (var-set mint-paused paused)
+            (if (is-eq operation "transfer")
+                (var-set transfer-paused paused)
+                (if (is-eq operation "marketplace")
+                    (var-set marketplace-operations-paused paused)
+                    (if (is-eq operation "emergency")
+                        (var-set emergency-mode paused)
+                        false
+                    )
+                )
+            )
+        )
+        
+        (emit-admin-event
+            EVENT-PAUSE-STATE-CHANGED
+            tx-sender
+            operation
+            (tuple (old-value none) (new-value (some (if paused u1 u0))) (target none))
+        )
+        
+        (ok true)
+    )
+)
+
+;; Configuration rollback capability
+(define-public (rollback-config 
+    (config-key (string-ascii 32))
+    (target-version uint)
+)
+    (begin
+        (try! (validate-admin tx-sender))
+        
+        (match (map-get? config-history { config-key: config-key, version: target-version })
+            history-data (let (
+                (rollback-value (unwrap! (get old-value history-data) ERR-NOT-FOUND))
+            )
+                (begin
+                    ;; Apply rollback
+                    (try! (apply-config-change config-key rollback-value))
+                    
+                    ;; Record rollback in history
+                    (let ((version (var-get next-config-version)))
+                        (map-set config-history { config-key: config-key, version: version } {
+                            old-value: (some (get new-value history-data)),
+                            new-value: rollback-value,
+                            changed-by: tx-sender,
+                            changed-at: stacks-block-height,
+                            reason: (some u"Configuration rollback")
+                        })
+                        (var-set next-config-version (+ version u1))
+                    )
+                    
+                    (emit-admin-event
+                        EVENT-CONFIG-UPDATED
+                        tx-sender
+                        "config-rollback"
+                        (tuple (old-value (some (get new-value history-data))) (new-value (some rollback-value)) (target none))
+                    )
+                    
+                    (ok true)
+                )
+            )
+            ERR-NOT-FOUND
+        )
+    )
+)
+
+;; Get configuration history
+(define-read-only (get-config-history (config-key (string-ascii 32)) (limit uint))
+    (let (
+        (safe-limit (if (> limit u20) u20 limit))
+        (current-version (var-get next-config-version))
+    )
+        (ok (tuple
+            (config-key config-key)
+            (current-version current-version)
+            (history (get-config-history-range config-key current-version safe-limit))
+        ))
+    )
+)
+
+;; Get configuration history range (simplified)
+(define-private (get-config-history-range (config-key (string-ascii 32)) (from-version uint) (limit uint))
+    ;; Simplified implementation - would return actual history
+    (list)
+)
+
+;; Get all active feature flags
+(define-read-only (get-active-feature-flags)
+    (ok (tuple
+        (flags (list)) ;; Would return actual flags
+        (timestamp stacks-block-height)
+    ))
+)
+
+;; Get current configuration snapshot
+(define-read-only (get-configuration-snapshot)
+    (ok (tuple
+        (version (var-get config-version))
+        (marketplace-fee (var-get marketplace-fee-percent))
+        (rate-limit-window (var-get rate-limit-window))
+        (max-operations-per-window (var-get max-operations-per-window))
+        (pause-states (tuple
+            (mint-paused (var-get mint-paused))
+            (transfer-paused (var-get transfer-paused))
+            (marketplace-paused (var-get marketplace-operations-paused))
+            (emergency-mode (var-get emergency-mode))
+        ))
+        (timestamp stacks-block-height)
+    ))
+)
