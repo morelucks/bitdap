@@ -415,6 +415,123 @@
 (define-data-var marketplace-fee-recipient principal tx-sender)
 (define-data-var total-fees-collected uint u0)
 
+;; Enhanced Security Framework
+
+;; Role-based access control
+(define-map admin-roles
+    { admin: principal }
+    { 
+        role: (string-ascii 16),
+        granted-at: uint,
+        granted-by: principal
+    }
+)
+
+;; Rate limiting for abuse prevention
+(define-map rate-limits
+    { user: principal, operation: (string-ascii 32) }
+    {
+        count: uint,
+        window-start: uint,
+        last-operation: uint
+    }
+)
+
+;; Blacklist for security
+(define-map blacklisted-users
+    { user: principal }
+    {
+        blacklisted: bool,
+        reason: (string-utf8 256),
+        blacklisted-at: uint
+    }
+)
+
+;; Emergency controls
+(define-data-var emergency-mode bool false)
+(define-data-var mint-paused bool false)
+(define-data-var transfer-paused bool false)
+(define-data-var marketplace-operations-paused bool false)
+
+;; Security configuration
+(define-data-var rate-limit-window uint u144) ;; ~24 hours in blocks
+(define-data-var max-operations-per-window uint u100)
+(define-data-var security-admin principal tx-sender)
+
+;; Security validation functions
+(define-private (check-rate-limit (user principal) (operation (string-ascii 32)))
+    (let (
+        (current-block stacks-block-height)
+        (rate-data (default-to 
+            { count: u0, window-start: current-block, last-operation: u0 }
+            (map-get? rate-limits { user: user, operation: operation })
+        ))
+        (window-start (get window-start rate-data))
+        (count (get count rate-data))
+    )
+        (if (> (- current-block window-start) (var-get rate-limit-window))
+            ;; New window, reset count
+            (begin
+                (map-set rate-limits { user: user, operation: operation } {
+                    count: u1,
+                    window-start: current-block,
+                    last-operation: current-block
+                })
+                (ok true)
+            )
+            ;; Same window, check limit
+            (if (>= count (var-get max-operations-per-window))
+                ERR-RATE_LIMITED
+                (begin
+                    (map-set rate-limits { user: user, operation: operation } {
+                        count: (+ count u1),
+                        window-start: window-start,
+                        last-operation: current-block
+                    })
+                    (ok true)
+                )
+            )
+        )
+    )
+)
+
+(define-private (check-blacklist (user principal))
+    (match (map-get? blacklisted-users { user: user })
+        blacklist-data (if (get blacklisted blacklist-data)
+            ERR-BLACKLISTED
+            (ok true)
+        )
+        (ok true)
+    )
+)
+
+(define-private (validate-security-checks (user principal) (operation (string-ascii 32)))
+    (begin
+        (try! (check-blacklist user))
+        (try! (check-rate-limit user operation))
+        (if (var-get emergency-mode)
+            ERR-MAINTENANCE-MODE
+            (ok true)
+        )
+    )
+)
+
+(define-private (check-admin-role (admin principal) (required-role (string-ascii 16)))
+    (match (map-get? admin-roles { admin: admin })
+        role-data (if (or 
+            (is-eq (get role role-data) required-role)
+            (is-eq (get role role-data) "super-admin")
+        )
+            (ok true)
+            ERR-INSUFFICIENT-PERMISSIONS
+        )
+        (if (is-eq admin (var-get contract-owner))
+            (ok true)
+            ERR-INSUFFICIENT-PERMISSIONS
+        )
+    )
+)
+
 ;; public functions
 ;; - Core NFT operations: mint, transfer, burn.
 
