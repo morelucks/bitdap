@@ -1665,3 +1665,299 @@
         (ok true)
     )
 )
+;; Enhanced Batch Operations System
+
+;; Batch size limits for resource management
+(define-constant MAX-BATCH-SIZE u20)
+(define-constant MAX-BATCH-TRANSFERS u10)
+(define-constant MAX-BATCH-LISTINGS u5)
+
+;; Enhanced batch mint with comprehensive validation
+(define-public (enhanced-batch-mint (recipients (list 20 { recipient: principal, tier: uint, uri: (optional (string-utf8 256)) })))
+    (begin
+        (try! (validate-admin tx-sender))
+        (try! (validate-not-paused))
+        (asserts! (<= (len recipients) MAX-BATCH-SIZE) ERR-MAX-BATCH-SIZE)
+        
+        (let ((result (fold enhanced-batch-mint-helper recipients (ok (list)))))
+            (match result
+                success-list (begin
+                    (emit-batch-event
+                        EVENT-BATCH-OPERATION
+                        tx-sender
+                        (len recipients)
+                        (len success-list)
+                        (tuple (operation-type "batch-mint") (details none))
+                    )
+                    (ok success-list)
+                )
+                error (err error)
+            )
+        )
+    )
+)
+
+;; Enhanced batch mint helper with security checks
+(define-private (enhanced-batch-mint-helper 
+    (item { recipient: principal, tier: uint, uri: (optional (string-utf8 256)) })
+    (acc (response (list 20 uint) uint))
+)
+    (match acc
+        success-list (let (
+            (recipient (get recipient item))
+            (tier (get tier item))
+            (uri (get uri item))
+        )
+            ;; Validate each item
+            (match (validate-tier tier)
+                success (match (check-blacklist recipient)
+                    success (let (
+                        (current-total (var-get total-supply))
+                        (new-total (+ current-total u1))
+                        (tier-row (default-to { supply: u0 } (map-get? tier-supplies { tier: tier })))
+                        (tier-supply (get supply tier-row))
+                        (new-tier-supply (+ tier-supply u1))
+                    )
+                        (if (and 
+                            (<= new-total MAX-SUPPLY)
+                            (not (is-tier-over-max? tier new-tier-supply))
+                        )
+                            (let ((token-id (var-get next-token-id)))
+                                (begin
+                                    ;; Mint the token
+                                    (map-set token-owners { token-id: token-id } { owner: recipient })
+                                    (map-set token-metadata { token-id: token-id } {
+                                        tier: tier,
+                                        uri: uri,
+                                    })
+                                    (map-set tier-supplies { tier: tier } { supply: new-tier-supply })
+                                    (var-set total-supply new-total)
+                                    (var-set next-token-id (+ token-id u1))
+                                    
+                                    ;; Track user if new
+                                    (if (is-none (map-get? user-registry { user: recipient }))
+                                        (begin
+                                            (map-set user-registry { user: recipient } { active: true })
+                                            (var-set user-count (+ (var-get user-count) u1))
+                                        )
+                                        true
+                                    )
+                                    
+                                    ;; Emit individual token event
+                                    (emit-token-event
+                                        EVENT-TOKEN-MINTED
+                                        token-id
+                                        tx-sender
+                                        (tuple (tier tier) (recipient (some recipient)) (from none) (to none))
+                                    )
+                                    
+                                    (ok (unwrap-panic (as-max-len? (append success-list token-id) u20)))
+                                )
+                            )
+                            acc ;; Skip if limits exceeded
+                        )
+                    )
+                    error acc ;; Skip if blacklisted
+                )
+                error acc ;; Skip if invalid tier
+            )
+        )
+        error (err error)
+    )
+)
+
+;; Enhanced batch transfer with individual validation
+(define-public (enhanced-batch-transfer (transfers (list 10 { token-id: uint, recipient: principal })))
+    (begin
+        (try! (validate-not-paused))
+        (try! (validate-security-checks tx-sender "batch-transfer"))
+        (asserts! (<= (len transfers) MAX-BATCH-TRANSFERS) ERR-MAX-BATCH-SIZE)
+        
+        (let ((result (fold enhanced-batch-transfer-helper transfers (ok u0))))
+            (match result
+                success-count (begin
+                    (emit-batch-event
+                        EVENT-BATCH-OPERATION
+                        tx-sender
+                        (len transfers)
+                        success-count
+                        (tuple (operation-type "batch-transfer") (details none))
+                    )
+                    (ok success-count)
+                )
+                error (err error)
+            )
+        )
+    )
+)
+
+;; Enhanced batch transfer helper with validation
+(define-private (enhanced-batch-transfer-helper 
+    (item { token-id: uint, recipient: principal })
+    (acc (response uint uint))
+)
+    (match acc
+        success-count (let (
+            (token-id (get token-id item))
+            (recipient (get recipient item))
+        )
+            ;; Validate token ownership and recipient
+            (match (validate-token-owner token-id tx-sender)
+                success (match (check-blacklist recipient)
+                    success (if (not (is-eq tx-sender recipient))
+                        (begin
+                            ;; Perform transfer
+                            (map-set token-owners { token-id: token-id } { owner: recipient })
+                            
+                            ;; Emit transfer event
+                            (emit-token-event
+                                EVENT-TOKEN-TRANSFERRED
+                                token-id
+                                tx-sender
+                                (tuple (tier u0) (recipient (some recipient)) (from (some tx-sender)) (to (some recipient)))
+                            )
+                            
+                            (ok (+ success-count u1))
+                        )
+                        (ok success-count) ;; Skip self-transfers
+                    )
+                    error (ok success-count) ;; Skip if recipient blacklisted
+                )
+                error (ok success-count) ;; Skip if not owner
+            )
+        )
+        error (err error)
+    )
+)
+
+;; Batch listing creation
+(define-public (batch-create-listings (listings (list 5 { token-id: uint, price: uint, expiry-blocks: uint })))
+    (begin
+        (try! (validate-marketplace-not-paused))
+        (try! (validate-security-checks tx-sender "batch-listing"))
+        (asserts! (<= (len listings) MAX-BATCH-LISTINGS) ERR-MAX-BATCH-SIZE)
+        
+        (let ((result (fold batch-create-listings-helper listings (ok (list)))))
+            (match result
+                success-list (begin
+                    (emit-batch-event
+                        EVENT-BATCH-OPERATION
+                        tx-sender
+                        (len listings)
+                        (len success-list)
+                        (tuple (operation-type "batch-listing") (details none))
+                    )
+                    (ok success-list)
+                )
+                error (err error)
+            )
+        )
+    )
+)
+
+;; Batch listing helper
+(define-private (batch-create-listings-helper 
+    (item { token-id: uint, price: uint, expiry-blocks: uint })
+    (acc (response (list 5 uint) uint))
+)
+    (match acc
+        success-list (let (
+            (token-id (get token-id item))
+            (price (get price item))
+            (expiry-blocks (get expiry-blocks item))
+        )
+            ;; Validate token ownership and price
+            (match (validate-token-owner token-id tx-sender)
+                success (match (validate-price price)
+                    success (let (
+                        (listing-id (var-get next-listing-id))
+                        (current-block stacks-block-height)
+                        (expiry-block (+ current-block expiry-blocks))
+                    )
+                        (begin
+                            ;; Create listing
+                            (map-set marketplace-listings { listing-id: listing-id } {
+                                token-id: token-id,
+                                seller: tx-sender,
+                                price: price,
+                                reserve-price: none,
+                                expiry-block: (some expiry-block),
+                                listing-type: "fixed",
+                                created-at: current-block,
+                                updated-at: current-block,
+                                active: true,
+                                view-count: u0
+                            })
+                            
+                            (var-set next-listing-id (+ listing-id u1))
+                            (var-set listing-count (+ (var-get listing-count) u1))
+                            
+                            ;; Emit listing event
+                            (emit-marketplace-event
+                                EVENT-LISTING-CREATED
+                                (some listing-id)
+                                (some token-id)
+                                tx-sender
+                                (tuple (price (some price)) (seller (some tx-sender)) (buyer none) (fee none))
+                            )
+                            
+                            (ok (unwrap-panic (as-max-len? (append success-list listing-id) u5)))
+                        )
+                    )
+                    error (ok success-list) ;; Skip invalid price
+                )
+                error (ok success-list) ;; Skip if not owner
+            )
+        )
+        error (err error)
+    )
+)
+
+;; Batch metadata update
+(define-public (batch-update-metadata (updates (list 10 { token-id: uint, uri: (optional (string-utf8 256)) })))
+    (begin
+        (try! (validate-admin tx-sender))
+        (asserts! (<= (len updates) u10) ERR-MAX-BATCH-SIZE)
+        
+        (let ((result (fold batch-update-metadata-helper updates (ok u0))))
+            (match result
+                success-count (begin
+                    (emit-batch-event
+                        EVENT-BATCH-OPERATION
+                        tx-sender
+                        (len updates)
+                        success-count
+                        (tuple (operation-type "batch-metadata") (details none))
+                    )
+                    (ok success-count)
+                )
+                error (err error)
+            )
+        )
+    )
+)
+
+;; Batch metadata update helper
+(define-private (batch-update-metadata-helper 
+    (item { token-id: uint, uri: (optional (string-utf8 256)) })
+    (acc (response uint uint))
+)
+    (match acc
+        success-count (let (
+            (token-id (get token-id item))
+            (uri (get uri item))
+        )
+            (match (map-get? token-metadata { token-id: token-id })
+                meta (begin
+                    (map-set token-metadata { token-id: token-id } {
+                        tier: (get tier meta),
+                        uri: uri
+                    })
+                    (ok (+ success-count u1))
+                )
+                (ok success-count) ;; Skip if token doesn't exist
+            )
+        )
+        error (err error)
+    )
+)
