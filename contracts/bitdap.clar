@@ -850,7 +850,7 @@
                     ERR-NOT-OWNER
                     (let (
                         (listing-id (var-get next-listing-id))
-                        (current-block block-height)
+                        (current-block stacks-block-height)
                         (expiry-block (+ current-block expiry-blocks))
                     )
                         (begin
@@ -926,7 +926,7 @@
                                 ;; Record purchase
                                 (map-set purchase-history { buyer: tx-sender, listing-id: listing-id } {
                                     purchase-price: price,
-                                    purchased-at: block-height,
+                                    purchased-at: stacks-block-height,
                                     seller: seller
                                 })
                                 ;; Update counters
