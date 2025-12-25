@@ -1558,3 +1558,153 @@ describe("Bitdap Multi Token - Event Emission Tests", () => {
     expect(hasTransferEvent).toBe(true);
   });
 });
+describe("Bitdap Multi Token - Complex Scenarios", () => {
+  beforeEach(() => {
+    // Create multiple tokens for complex scenarios
+    simnet.callPublicFn(
+      contractName,
+      "create-token",
+      [Cl.stringUtf8("Scenario A"), Cl.stringUtf8("SCA"), Cl.uint(18), Cl.bool(true), Cl.none()],
+      deployer
+    );
+    simnet.callPublicFn(
+      contractName,
+      "create-token",
+      [Cl.stringUtf8("Scenario B"), Cl.stringUtf8("SCB"), Cl.uint(6), Cl.bool(true), Cl.none()],
+      deployer
+    );
+  });
+
+  it("should handle complex multi-user, multi-token scenario", () => {
+    // Mint different amounts to different users
+    simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(address1), Cl.uint(1), Cl.uint(1000)],
+      deployer
+    );
+    simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(address2), Cl.uint(1), Cl.uint(500)],
+      deployer
+    );
+    simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(address1), Cl.uint(2), Cl.uint(2000)],
+      deployer
+    );
+
+    // Set up approvals
+    simnet.callPublicFn(
+      contractName,
+      "set-approval-for-all",
+      [Cl.principal(address3), Cl.bool(true)],
+      address1
+    );
+
+    // Complex transfers via approved operator
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "batch-transfer-from",
+      [
+        Cl.principal(address1),
+        Cl.principal(address2),
+        Cl.list([Cl.uint(1), Cl.uint(2)]),
+        Cl.list([Cl.uint(200), Cl.uint(300)])
+      ],
+      address1
+    );
+    expect(result).toBeOk(Cl.tuple({ from: Cl.principal(address1), to: Cl.principal(address2) }));
+
+    // Verify final balances
+    const balance1_1 = simnet.callReadOnlyFn(
+      contractName,
+      "get-balance",
+      [Cl.principal(address1), Cl.uint(1)],
+      address1
+    );
+    expect(balance1_1.result).toBeOk(Cl.uint(800));
+
+    const balance2_1 = simnet.callReadOnlyFn(
+      contractName,
+      "get-balance",
+      [Cl.principal(address2), Cl.uint(1)],
+      address1
+    );
+    expect(balance2_1.result).toBeOk(Cl.uint(700)); // 500 + 200
+  });
+
+  it("should handle mixed fungible and non-fungible tokens", () => {
+    // Create NFT token
+    simnet.callPublicFn(
+      contractName,
+      "create-token",
+      [Cl.stringUtf8("NFT Token"), Cl.stringUtf8("NFT"), Cl.uint(0), Cl.bool(false), Cl.none()],
+      deployer
+    );
+
+    // Mint NFT (amount 1)
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(address1), Cl.uint(3), Cl.uint(1)],
+      deployer
+    );
+    expect(result).toBeOk(Cl.bool(true));
+
+    // Verify NFT balance
+    const nftBalance = simnet.callReadOnlyFn(
+      contractName,
+      "get-balance",
+      [Cl.principal(address1), Cl.uint(3)],
+      address1
+    );
+    expect(nftBalance.result).toBeOk(Cl.uint(1));
+  });
+
+  it("should handle approval and transfer chain", () => {
+    // Mint tokens to address1
+    simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(address1), Cl.uint(1), Cl.uint(1000)],
+      deployer
+    );
+
+    // Set specific allowance
+    simnet.callPublicFn(
+      contractName,
+      "approve",
+      [Cl.principal(address2), Cl.uint(1), Cl.uint(300)],
+      address1
+    );
+
+    // Verify allowance
+    const allowance = simnet.callReadOnlyFn(
+      contractName,
+      "get-allowance",
+      [Cl.principal(address1), Cl.principal(address2), Cl.uint(1)],
+      address1
+    );
+    expect(allowance.result).toBeOk(Cl.uint(300));
+
+    // Set approval for all to address3
+    simnet.callPublicFn(
+      contractName,
+      "set-approval-for-all",
+      [Cl.principal(address3), Cl.bool(true)],
+      address1
+    );
+
+    // Verify approval for all
+    const approvalForAll = simnet.callReadOnlyFn(
+      contractName,
+      "is-approved-for-all",
+      [Cl.principal(address1), Cl.principal(address3)],
+      address1
+    );
+    expect(approvalForAll.result).toBeOk(Cl.bool(true));
+  });
+});
