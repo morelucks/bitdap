@@ -475,3 +475,138 @@ describe("Bitdap NFT Collection - Approval System", () => {
     expect(result).toBeErr(Cl.uint(404)); // ERR-NOT-FOUND
   });
 });
+describe("Bitdap NFT Collection - Burning Functionality", () => {
+  beforeEach(() => {
+    // Mint NFT for burning tests
+    simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(address1), Cl.some(Cl.stringUtf8("https://example.com/nft/1.json"))],
+      deployer
+    );
+  });
+
+  it("should allow owner to burn NFT", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "burn",
+      [Cl.uint(1)],
+      address1
+    );
+    expect(result).toBeOk(Cl.bool(true));
+
+    // Verify token no longer exists
+    const ownerResult = simnet.callReadOnlyFn(
+      contractName,
+      "get-owner",
+      [Cl.uint(1)],
+      address1
+    );
+    expect(ownerResult.result).toBeOk(Cl.none());
+  });
+
+  it("should decrease total supply after burning", () => {
+    // Check initial supply
+    const initialSupply = simnet.callReadOnlyFn(
+      contractName,
+      "get-total-supply",
+      [],
+      address1
+    );
+    expect(initialSupply.result).toBeOk(Cl.uint(1));
+
+    // Burn NFT
+    simnet.callPublicFn(
+      contractName,
+      "burn",
+      [Cl.uint(1)],
+      address1
+    );
+
+    // Check supply decreased
+    const finalSupply = simnet.callReadOnlyFn(
+      contractName,
+      "get-total-supply",
+      [],
+      address1
+    );
+    expect(finalSupply.result).toBeOk(Cl.uint(0));
+  });
+
+  it("should reject burning from non-owner", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "burn",
+      [Cl.uint(1)],
+      address2 // Non-owner
+    );
+    expect(result).toBeErr(Cl.uint(401)); // ERR-UNAUTHORIZED
+  });
+
+  it("should reject burning non-existent token", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "burn",
+      [Cl.uint(999)],
+      address1
+    );
+    expect(result).toBeErr(Cl.uint(404)); // ERR-NOT-FOUND
+  });
+
+  it("should reject burning when contract is paused", () => {
+    // Pause contract
+    simnet.callPublicFn(
+      contractName,
+      "pause-contract",
+      [],
+      deployer
+    );
+
+    // Try to burn
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "burn",
+      [Cl.uint(1)],
+      address1
+    );
+    expect(result).toBeErr(Cl.uint(406)); // ERR-CONTRACT-PAUSED
+  });
+
+  it("should remove token metadata after burning", () => {
+    // Burn NFT
+    simnet.callPublicFn(
+      contractName,
+      "burn",
+      [Cl.uint(1)],
+      address1
+    );
+
+    // Check metadata is removed
+    const uriResult = simnet.callReadOnlyFn(
+      contractName,
+      "get-token-uri",
+      [Cl.uint(1)],
+      address1
+    );
+    expect(uriResult.result).toBeOk(Cl.none());
+  });
+
+  it("should confirm token no longer exists after burning", () => {
+    // Burn NFT
+    simnet.callPublicFn(
+      contractName,
+      "burn",
+      [Cl.uint(1)],
+      address1
+    );
+
+    // Check token existence
+    const existsResult = simnet.callReadOnlyFn(
+      contractName,
+      "token-exists?",
+      [Cl.uint(1)],
+      address1
+    );
+    expect(existsResult.result).toBeBool(false);
+  });
+});
