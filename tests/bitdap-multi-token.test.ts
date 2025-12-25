@@ -584,3 +584,162 @@ describe("Bitdap Multi Token - Transfer", () => {
     expect(result).toBeErr(Cl.uint(408)); // ERR-TOKEN-NOT-EXISTS
   });
 });
+describe("Bitdap Multi Token - Safe Transfer & Batch Transfer", () => {
+  beforeEach(() => {
+    // Create multiple tokens for testing
+    simnet.callPublicFn(
+      contractName,
+      "create-token",
+      [Cl.stringUtf8("Token A"), Cl.stringUtf8("TA"), Cl.uint(18), Cl.bool(true), Cl.none()],
+      deployer
+    );
+    simnet.callPublicFn(
+      contractName,
+      "create-token",
+      [Cl.stringUtf8("Token B"), Cl.stringUtf8("TB"), Cl.uint(6), Cl.bool(true), Cl.none()],
+      deployer
+    );
+    
+    // Mint tokens to address1
+    simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(address1), Cl.uint(1), Cl.uint(1000)],
+      deployer
+    );
+    simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(address1), Cl.uint(2), Cl.uint(2000)],
+      deployer
+    );
+  });
+
+  it("should perform safe transfer with data", () => {
+    const transferData = new TextEncoder().encode("transfer metadata");
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "safe-transfer-from",
+      [
+        Cl.principal(address1),
+        Cl.principal(address2),
+        Cl.uint(1),
+        Cl.uint(500),
+        Cl.buffer(transferData)
+      ],
+      address1
+    );
+    expect(result).toBeOk(Cl.bool(true));
+  });
+
+  it("should perform batch transfer successfully", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "batch-transfer-from",
+      [
+        Cl.principal(address1),
+        Cl.principal(address2),
+        Cl.list([Cl.uint(1), Cl.uint(2)]),
+        Cl.list([Cl.uint(300), Cl.uint(700)])
+      ],
+      address1
+    );
+    expect(result).toBeOk(Cl.tuple({ from: Cl.principal(address1), to: Cl.principal(address2) }));
+  });
+
+  it("should update balances correctly after batch transfer", () => {
+    // Perform batch transfer
+    simnet.callPublicFn(
+      contractName,
+      "batch-transfer-from",
+      [
+        Cl.principal(address1),
+        Cl.principal(address2),
+        Cl.list([Cl.uint(1), Cl.uint(2)]),
+        Cl.list([Cl.uint(400), Cl.uint(800)])
+      ],
+      address1
+    );
+
+    // Check sender balances
+    const senderBalance1 = simnet.callReadOnlyFn(
+      contractName,
+      "get-balance",
+      [Cl.principal(address1), Cl.uint(1)],
+      address1
+    );
+    expect(senderBalance1.result).toBeOk(Cl.uint(600));
+
+    const senderBalance2 = simnet.callReadOnlyFn(
+      contractName,
+      "get-balance",
+      [Cl.principal(address1), Cl.uint(2)],
+      address1
+    );
+    expect(senderBalance2.result).toBeOk(Cl.uint(1200));
+
+    // Check recipient balances
+    const recipientBalance1 = simnet.callReadOnlyFn(
+      contractName,
+      "get-balance",
+      [Cl.principal(address2), Cl.uint(1)],
+      address1
+    );
+    expect(recipientBalance1.result).toBeOk(Cl.uint(400));
+
+    const recipientBalance2 = simnet.callReadOnlyFn(
+      contractName,
+      "get-balance",
+      [Cl.principal(address2), Cl.uint(2)],
+      address1
+    );
+    expect(recipientBalance2.result).toBeOk(Cl.uint(800));
+  });
+
+  it("should reject batch transfer with mismatched array lengths", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "batch-transfer-from",
+      [
+        Cl.principal(address1),
+        Cl.principal(address2),
+        Cl.list([Cl.uint(1), Cl.uint(2)]),
+        Cl.list([Cl.uint(300)]) // Mismatched length
+      ],
+      address1
+    );
+    expect(result).toBeErr(Cl.uint(404)); // ERR-INVALID-AMOUNT
+  });
+
+  it("should perform safe batch transfer with data", () => {
+    const transferData = new TextEncoder().encode("batch transfer metadata");
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "safe-batch-transfer-from",
+      [
+        Cl.principal(address1),
+        Cl.principal(address2),
+        Cl.list([Cl.uint(1), Cl.uint(2)]),
+        Cl.list([Cl.uint(200), Cl.uint(400)]),
+        Cl.buffer(transferData)
+      ],
+      address1
+    );
+    expect(result).toBeOk(Cl.bool(true));
+  });
+
+  it("should handle zero amounts in batch transfer", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "batch-transfer-from",
+      [
+        Cl.principal(address1),
+        Cl.principal(address2),
+        Cl.list([Cl.uint(1), Cl.uint(2)]),
+        Cl.list([Cl.uint(0), Cl.uint(500)]) // Zero amount for first token
+      ],
+      address1
+    );
+    expect(result).toBeOk(Cl.tuple({ from: Cl.principal(address1), to: Cl.principal(address2) }));
+  });
+});
