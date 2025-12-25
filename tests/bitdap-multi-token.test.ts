@@ -471,3 +471,116 @@ describe("Bitdap Multi Token - Batch Minting", () => {
     expect(balance2.result).toBeOk(Cl.uint(0));
   });
 });
+describe("Bitdap Multi Token - Transfer", () => {
+  beforeEach(() => {
+    // Create and mint tokens for testing transfers
+    simnet.callPublicFn(
+      contractName,
+      "create-token",
+      [
+        Cl.stringUtf8("Transfer Token"),
+        Cl.stringUtf8("XFER"),
+        Cl.uint(18),
+        Cl.bool(true),
+        Cl.none()
+      ],
+      deployer
+    );
+    
+    // Mint tokens to address1
+    simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(address1), Cl.uint(1), Cl.uint(1000)],
+      deployer
+    );
+  });
+
+  it("should allow token owner to transfer tokens", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "transfer-from",
+      [Cl.principal(address1), Cl.principal(address2), Cl.uint(1), Cl.uint(500)],
+      address1
+    );
+    expect(result).toBeOk(Cl.bool(true));
+  });
+
+  it("should update balances correctly after transfer", () => {
+    // Transfer tokens
+    simnet.callPublicFn(
+      contractName,
+      "transfer-from",
+      [Cl.principal(address1), Cl.principal(address2), Cl.uint(1), Cl.uint(300)],
+      address1
+    );
+
+    // Check sender balance
+    const senderBalance = simnet.callReadOnlyFn(
+      contractName,
+      "get-balance",
+      [Cl.principal(address1), Cl.uint(1)],
+      address1
+    );
+    expect(senderBalance.result).toBeOk(Cl.uint(700));
+
+    // Check recipient balance
+    const recipientBalance = simnet.callReadOnlyFn(
+      contractName,
+      "get-balance",
+      [Cl.principal(address2), Cl.uint(1)],
+      address1
+    );
+    expect(recipientBalance.result).toBeOk(Cl.uint(300));
+  });
+
+  it("should reject transfer from non-owner", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "transfer-from",
+      [Cl.principal(address1), Cl.principal(address2), Cl.uint(1), Cl.uint(500)],
+      address2 // address2 trying to transfer address1's tokens
+    );
+    expect(result).toBeErr(Cl.uint(401)); // ERR-UNAUTHORIZED
+  });
+
+  it("should reject transfer with insufficient balance", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "transfer-from",
+      [Cl.principal(address1), Cl.principal(address2), Cl.uint(1), Cl.uint(2000)], // More than balance
+      address1
+    );
+    expect(result).toBeErr(Cl.uint(402)); // ERR-INSUFFICIENT-BALANCE
+  });
+
+  it("should reject self-transfer", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "transfer-from",
+      [Cl.principal(address1), Cl.principal(address1), Cl.uint(1), Cl.uint(500)],
+      address1
+    );
+    expect(result).toBeErr(Cl.uint(405)); // ERR-SELF-TRANSFER
+  });
+
+  it("should reject transfer of zero amount", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "transfer-from",
+      [Cl.principal(address1), Cl.principal(address2), Cl.uint(1), Cl.uint(0)],
+      address1
+    );
+    expect(result).toBeErr(Cl.uint(404)); // ERR-INVALID-AMOUNT
+  });
+
+  it("should reject transfer of non-existent token", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "transfer-from",
+      [Cl.principal(address1), Cl.principal(address2), Cl.uint(999), Cl.uint(500)],
+      address1
+    );
+    expect(result).toBeErr(Cl.uint(408)); // ERR-TOKEN-NOT-EXISTS
+  });
+});
