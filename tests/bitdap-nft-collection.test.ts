@@ -610,3 +610,190 @@ describe("Bitdap NFT Collection - Burning Functionality", () => {
     expect(existsResult.result).toBeBool(false);
   });
 });
+describe("Bitdap NFT Collection - Administrative Functions", () => {
+  it("should allow owner to set collection metadata", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "set-collection-metadata",
+      [
+        Cl.stringAscii("New Collection Name"),
+        Cl.stringAscii("NCN"),
+        Cl.some(Cl.stringUtf8("https://newcollection.com")),
+        Cl.stringUtf8("Updated collection description")
+      ],
+      deployer
+    );
+    expect(result).toBeOk(Cl.bool(true));
+
+    // Verify metadata updated
+    const nameResult = simnet.callReadOnlyFn(
+      contractName,
+      "get-collection-name",
+      [],
+      address1
+    );
+    expect(nameResult.result).toBeOk(Cl.stringAscii("New Collection Name"));
+  });
+
+  it("should allow owner to set mint price", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "set-mint-price",
+      [Cl.uint(1000000)], // 1 STX
+      deployer
+    );
+    expect(result).toBeOk(Cl.bool(true));
+
+    // Verify mint info updated
+    const mintInfoResult = simnet.callReadOnlyFn(
+      contractName,
+      "get-mint-info",
+      [],
+      address1
+    );
+    expect(mintInfoResult.result).toBeOk(
+      Cl.tuple({
+        price: Cl.uint(1000000),
+        "per-address-limit": Cl.uint(10),
+        "max-supply": Cl.uint(10000),
+        "current-supply": Cl.uint(0),
+        "minting-enabled": Cl.bool(true)
+      })
+    );
+  });
+
+  it("should allow owner to set per-address limit", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "set-per-address-limit",
+      [Cl.uint(5)],
+      deployer
+    );
+    expect(result).toBeOk(Cl.bool(true));
+  });
+
+  it("should allow owner to set max supply", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "set-max-supply",
+      [Cl.uint(5000)],
+      deployer
+    );
+    expect(result).toBeOk(Cl.bool(true));
+  });
+
+  it("should allow owner to pause and unpause contract", () => {
+    // Pause
+    const pauseResult = simnet.callPublicFn(
+      contractName,
+      "pause-contract",
+      [],
+      deployer
+    );
+    expect(pauseResult.result).toBeOk(Cl.bool(true));
+
+    // Check status
+    const statusResult = simnet.callReadOnlyFn(
+      contractName,
+      "get-contract-status",
+      [],
+      address1
+    );
+    expect(statusResult.result).toBeOk(
+      Cl.tuple({
+        paused: Cl.bool(true),
+        "minting-enabled": Cl.bool(true),
+        owner: Cl.principal(deployer)
+      })
+    );
+
+    // Unpause
+    const unpauseResult = simnet.callPublicFn(
+      contractName,
+      "unpause-contract",
+      [],
+      deployer
+    );
+    expect(unpauseResult.result).toBeOk(Cl.bool(true));
+  });
+
+  it("should allow owner to toggle minting enabled", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "set-minting-enabled",
+      [Cl.bool(false)],
+      deployer
+    );
+    expect(result).toBeOk(Cl.bool(true));
+
+    // Check status
+    const statusResult = simnet.callReadOnlyFn(
+      contractName,
+      "get-contract-status",
+      [],
+      address1
+    );
+    expect(statusResult.result).toBeOk(
+      Cl.tuple({
+        paused: Cl.bool(false),
+        "minting-enabled": Cl.bool(false),
+        owner: Cl.principal(deployer)
+      })
+    );
+  });
+
+  it("should reject admin functions from non-owner", () => {
+    const adminFunctions = [
+      {
+        fn: "set-collection-metadata",
+        args: [
+          Cl.stringAscii("Hack"),
+          Cl.stringAscii("HACK"),
+          Cl.none(),
+          Cl.stringUtf8("Hacked")
+        ]
+      },
+      {
+        fn: "set-mint-price",
+        args: [Cl.uint(0)]
+      },
+      {
+        fn: "pause-contract",
+        args: []
+      },
+      {
+        fn: "set-minting-enabled",
+        args: [Cl.bool(false)]
+      }
+    ];
+
+    adminFunctions.forEach(test => {
+      const { result } = simnet.callPublicFn(
+        contractName,
+        test.fn,
+        test.args,
+        address1 // Non-owner
+      );
+      expect(result).toBeErr(Cl.uint(401)); // ERR-UNAUTHORIZED
+    });
+  });
+
+  it("should allow owner to transfer ownership", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "transfer-ownership",
+      [Cl.principal(address1)],
+      deployer
+    );
+    expect(result).toBeOk(Cl.bool(true));
+
+    // Verify new owner
+    const ownerResult = simnet.callReadOnlyFn(
+      contractName,
+      "get-contract-owner",
+      [],
+      address1
+    );
+    expect(ownerResult.result).toBeOk(Cl.principal(address1));
+  });
+});
