@@ -1413,3 +1413,72 @@ describe("Bitdap Multi Token - Contract Pause Functionality", () => {
     expect(result).toBeOk(Cl.bool(false));
   });
 });
+
+describe("Bitdap Multi Token - Edge Cases and Error Handling", () => {
+  beforeEach(() => {
+    // Create test tokens for edge case testing
+    simnet.callPublicFn(
+      contractName,
+      "create-token",
+      [Cl.stringUtf8("Edge Token"), Cl.stringUtf8("EDGE"), Cl.uint(18), Cl.bool(true), Cl.none()],
+      deployer
+    );
+  });
+
+  it("should handle maximum uint values correctly", () => {
+    // Test with very large amounts (within uint limits)
+    const largeAmount = 18446744073709551615n; // Max uint64 - 1
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(address1), Cl.uint(1), Cl.uint(Number.MAX_SAFE_INTEGER)],
+      deployer
+    );
+    expect(result).toBeOk(Cl.bool(true));
+  });
+
+  it("should handle empty string edge cases", () => {
+    // Test creating token with minimal valid strings
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "create-token",
+      [Cl.stringUtf8("A"), Cl.stringUtf8("B"), Cl.uint(0), Cl.bool(false), Cl.none()],
+      deployer
+    );
+    expect(result).toBeOk(Cl.uint(2));
+  });
+
+  it("should handle multiple rapid operations", () => {
+    // Mint tokens
+    simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(address1), Cl.uint(1), Cl.uint(1000)],
+      deployer
+    );
+
+    // Rapid transfer operations
+    simnet.callPublicFn(
+      contractName,
+      "transfer-from",
+      [Cl.principal(address1), Cl.principal(address2), Cl.uint(1), Cl.uint(100)],
+      address1
+    );
+    
+    simnet.callPublicFn(
+      contractName,
+      "transfer-from",
+      [Cl.principal(address2), Cl.principal(address3), Cl.uint(1), Cl.uint(50)],
+      address2
+    );
+
+    // Verify final balances
+    const balance3 = simnet.callReadOnlyFn(
+      contractName,
+      "get-balance",
+      [Cl.principal(address3), Cl.uint(1)],
+      address1
+    );
+    expect(balance3.result).toBeOk(Cl.uint(50));
+  });
+});
