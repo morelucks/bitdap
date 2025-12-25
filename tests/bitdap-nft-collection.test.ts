@@ -797,3 +797,174 @@ describe("Bitdap NFT Collection - Administrative Functions", () => {
     expect(ownerResult.result).toBeOk(Cl.principal(address1));
   });
 });
+describe("Bitdap NFT Collection - Batch Operations", () => {
+  beforeEach(() => {
+    // Mint some NFTs for batch operations
+    simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(address1), Cl.some(Cl.stringUtf8("https://example.com/nft/1.json"))],
+      deployer
+    );
+    simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(address1), Cl.some(Cl.stringUtf8("https://example.com/nft/2.json"))],
+      deployer
+    );
+    simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(address1), Cl.some(Cl.stringUtf8("https://example.com/nft/3.json"))],
+      deployer
+    );
+  });
+
+  it("should allow batch minting by owner", () => {
+    const recipients = [
+      {
+        recipient: Cl.principal(address2),
+        uri: Cl.some(Cl.stringUtf8("https://example.com/batch/1.json"))
+      },
+      {
+        recipient: Cl.principal(address2),
+        uri: Cl.some(Cl.stringUtf8("https://example.com/batch/2.json"))
+      }
+    ];
+
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "batch-mint",
+      [Cl.list(recipients.map(r => Cl.tuple(r)))],
+      deployer
+    );
+    expect(result).toBeOk(Cl.list([Cl.uint(4), Cl.uint(5)]));
+
+    // Verify tokens were minted
+    const owner1 = simnet.callReadOnlyFn(
+      contractName,
+      "get-owner",
+      [Cl.uint(4)],
+      address1
+    );
+    expect(owner1.result).toBeOk(Cl.some(Cl.principal(address2)));
+
+    const owner2 = simnet.callReadOnlyFn(
+      contractName,
+      "get-owner",
+      [Cl.uint(5)],
+      address1
+    );
+    expect(owner2.result).toBeOk(Cl.some(Cl.principal(address2)));
+  });
+
+  it("should allow batch burning by owner", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "batch-burn",
+      [Cl.list([Cl.uint(1), Cl.uint(2)])],
+      address1
+    );
+    expect(result).toBeOk(Cl.uint(2));
+
+    // Verify tokens were burned
+    const owner1 = simnet.callReadOnlyFn(
+      contractName,
+      "get-owner",
+      [Cl.uint(1)],
+      address1
+    );
+    expect(owner1.result).toBeOk(Cl.none());
+
+    const owner2 = simnet.callReadOnlyFn(
+      contractName,
+      "get-owner",
+      [Cl.uint(2)],
+      address1
+    );
+    expect(owner2.result).toBeOk(Cl.none());
+  });
+
+  it("should allow batch transfers", () => {
+    const transfers = [
+      {
+        "token-id": Cl.uint(1),
+        recipient: Cl.principal(address2)
+      },
+      {
+        "token-id": Cl.uint(2),
+        recipient: Cl.principal(address3)
+      }
+    ];
+
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "batch-transfer",
+      [Cl.list(transfers.map(t => Cl.tuple(t)))],
+      address1
+    );
+    expect(result).toBeOk(Cl.uint(2));
+
+    // Verify transfers
+    const owner1 = simnet.callReadOnlyFn(
+      contractName,
+      "get-owner",
+      [Cl.uint(1)],
+      address1
+    );
+    expect(owner1.result).toBeOk(Cl.some(Cl.principal(address2)));
+
+    const owner2 = simnet.callReadOnlyFn(
+      contractName,
+      "get-owner",
+      [Cl.uint(2)],
+      address1
+    );
+    expect(owner2.result).toBeOk(Cl.some(Cl.principal(address3)));
+  });
+
+  it("should reject batch operations when contract is paused", () => {
+    // Pause contract
+    simnet.callPublicFn(
+      contractName,
+      "pause-contract",
+      [],
+      deployer
+    );
+
+    // Try batch burn
+    const burnResult = simnet.callPublicFn(
+      contractName,
+      "batch-burn",
+      [Cl.list([Cl.uint(1)])],
+      address1
+    );
+    expect(burnResult.result).toBeErr(Cl.uint(406)); // ERR-CONTRACT-PAUSED
+
+    // Try batch transfer
+    const transferResult = simnet.callPublicFn(
+      contractName,
+      "batch-transfer",
+      [Cl.list([Cl.tuple({ "token-id": Cl.uint(1), recipient: Cl.principal(address2) })])],
+      address1
+    );
+    expect(transferResult.result).toBeErr(Cl.uint(406)); // ERR-CONTRACT-PAUSED
+  });
+
+  it("should reject batch mint from non-owner", () => {
+    const recipients = [
+      {
+        recipient: Cl.principal(address2),
+        uri: Cl.some(Cl.stringUtf8("https://example.com/batch/1.json"))
+      }
+    ];
+
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "batch-mint",
+      [Cl.list(recipients.map(r => Cl.tuple(r)))],
+      address1 // Non-owner
+    );
+    expect(result).toBeErr(Cl.uint(401)); // ERR-UNAUTHORIZED
+  });
+});
