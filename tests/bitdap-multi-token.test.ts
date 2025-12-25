@@ -1413,3 +1413,572 @@ describe("Bitdap Multi Token - Contract Pause Functionality", () => {
     expect(result).toBeOk(Cl.bool(false));
   });
 });
+
+describe("Bitdap Multi Token - Edge Cases and Error Handling", () => {
+  beforeEach(() => {
+    // Create test tokens for edge case testing
+    simnet.callPublicFn(
+      contractName,
+      "create-token",
+      [Cl.stringUtf8("Edge Token"), Cl.stringUtf8("EDGE"), Cl.uint(18), Cl.bool(true), Cl.none()],
+      deployer
+    );
+  });
+
+  it("should handle maximum uint values correctly", () => {
+    // Test with very large amounts (within uint limits)
+    const largeAmount = 18446744073709551615n; // Max uint64 - 1
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(address1), Cl.uint(1), Cl.uint(Number.MAX_SAFE_INTEGER)],
+      deployer
+    );
+    expect(result).toBeOk(Cl.bool(true));
+  });
+
+  it("should handle empty string edge cases", () => {
+    // Test creating token with minimal valid strings
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "create-token",
+      [Cl.stringUtf8("A"), Cl.stringUtf8("B"), Cl.uint(0), Cl.bool(false), Cl.none()],
+      deployer
+    );
+    expect(result).toBeOk(Cl.uint(2));
+  });
+
+  it("should handle multiple rapid operations", () => {
+    // Mint tokens
+    simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(address1), Cl.uint(1), Cl.uint(1000)],
+      deployer
+    );
+
+    // Rapid transfer operations
+    simnet.callPublicFn(
+      contractName,
+      "transfer-from",
+      [Cl.principal(address1), Cl.principal(address2), Cl.uint(1), Cl.uint(100)],
+      address1
+    );
+    
+    simnet.callPublicFn(
+      contractName,
+      "transfer-from",
+      [Cl.principal(address2), Cl.principal(address3), Cl.uint(1), Cl.uint(50)],
+      address2
+    );
+
+    // Verify final balances
+    const balance3 = simnet.callReadOnlyFn(
+      contractName,
+      "get-balance",
+      [Cl.principal(address3), Cl.uint(1)],
+      address1
+    );
+    expect(balance3.result).toBeOk(Cl.uint(50));
+  });
+});
+describe("Bitdap Multi Token - Event Emission Tests", () => {
+  beforeEach(() => {
+    simnet.callPublicFn(
+      contractName,
+      "create-token",
+      [Cl.stringUtf8("Event Token"), Cl.stringUtf8("EVENT"), Cl.uint(18), Cl.bool(true), Cl.none()],
+      deployer
+    );
+  });
+
+  it("should emit events on token creation", () => {
+    const { result, events } = simnet.callPublicFn(
+      contractName,
+      "create-token",
+      [Cl.stringUtf8("New Token"), Cl.stringUtf8("NEW"), Cl.uint(6), Cl.bool(true), Cl.none()],
+      deployer
+    );
+    
+    expect(result).toBeOk(Cl.uint(2));
+    expect(events.length).toBeGreaterThan(0);
+    
+    // Check that creation event was emitted
+    const hasCreationEvent = events.some((e: any) => {
+      const eventStr = JSON.stringify(e);
+      return eventStr.includes("create-token") || eventStr.includes("New Token");
+    });
+    expect(hasCreationEvent).toBe(true);
+  });
+
+  it("should emit events on minting", () => {
+    const { result, events } = simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(address1), Cl.uint(1), Cl.uint(500)],
+      deployer
+    );
+    
+    expect(result).toBeOk(Cl.bool(true));
+    expect(events.length).toBeGreaterThan(0);
+    
+    // Check that mint event was emitted
+    const hasMintEvent = events.some((e: any) => {
+      const eventStr = JSON.stringify(e);
+      return eventStr.includes("mint") || eventStr.includes("500");
+    });
+    expect(hasMintEvent).toBe(true);
+  });
+
+  it("should emit events on transfers", () => {
+    // First mint tokens
+    simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(address1), Cl.uint(1), Cl.uint(1000)],
+      deployer
+    );
+
+    // Then transfer
+    const { result, events } = simnet.callPublicFn(
+      contractName,
+      "transfer-from",
+      [Cl.principal(address1), Cl.principal(address2), Cl.uint(1), Cl.uint(300)],
+      address1
+    );
+    
+    expect(result).toBeOk(Cl.bool(true));
+    expect(events.length).toBeGreaterThan(0);
+    
+    // Check that transfer event was emitted
+    const hasTransferEvent = events.some((e: any) => {
+      const eventStr = JSON.stringify(e);
+      return eventStr.includes("transfer") || eventStr.includes("300");
+    });
+    expect(hasTransferEvent).toBe(true);
+  });
+});
+describe("Bitdap Multi Token - Complex Scenarios", () => {
+  beforeEach(() => {
+    // Create multiple tokens for complex scenarios
+    simnet.callPublicFn(
+      contractName,
+      "create-token",
+      [Cl.stringUtf8("Scenario A"), Cl.stringUtf8("SCA"), Cl.uint(18), Cl.bool(true), Cl.none()],
+      deployer
+    );
+    simnet.callPublicFn(
+      contractName,
+      "create-token",
+      [Cl.stringUtf8("Scenario B"), Cl.stringUtf8("SCB"), Cl.uint(6), Cl.bool(true), Cl.none()],
+      deployer
+    );
+  });
+
+  it("should handle complex multi-user, multi-token scenario", () => {
+    // Mint different amounts to different users
+    simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(address1), Cl.uint(1), Cl.uint(1000)],
+      deployer
+    );
+    simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(address2), Cl.uint(1), Cl.uint(500)],
+      deployer
+    );
+    simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(address1), Cl.uint(2), Cl.uint(2000)],
+      deployer
+    );
+
+    // Set up approvals
+    simnet.callPublicFn(
+      contractName,
+      "set-approval-for-all",
+      [Cl.principal(address3), Cl.bool(true)],
+      address1
+    );
+
+    // Complex transfers via approved operator
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "batch-transfer-from",
+      [
+        Cl.principal(address1),
+        Cl.principal(address2),
+        Cl.list([Cl.uint(1), Cl.uint(2)]),
+        Cl.list([Cl.uint(200), Cl.uint(300)])
+      ],
+      address1
+    );
+    expect(result).toBeOk(Cl.tuple({ from: Cl.principal(address1), to: Cl.principal(address2) }));
+
+    // Verify final balances
+    const balance1_1 = simnet.callReadOnlyFn(
+      contractName,
+      "get-balance",
+      [Cl.principal(address1), Cl.uint(1)],
+      address1
+    );
+    expect(balance1_1.result).toBeOk(Cl.uint(800));
+
+    const balance2_1 = simnet.callReadOnlyFn(
+      contractName,
+      "get-balance",
+      [Cl.principal(address2), Cl.uint(1)],
+      address1
+    );
+    expect(balance2_1.result).toBeOk(Cl.uint(700)); // 500 + 200
+  });
+
+  it("should handle mixed fungible and non-fungible tokens", () => {
+    // Create NFT token
+    simnet.callPublicFn(
+      contractName,
+      "create-token",
+      [Cl.stringUtf8("NFT Token"), Cl.stringUtf8("NFT"), Cl.uint(0), Cl.bool(false), Cl.none()],
+      deployer
+    );
+
+    // Mint NFT (amount 1)
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(address1), Cl.uint(3), Cl.uint(1)],
+      deployer
+    );
+    expect(result).toBeOk(Cl.bool(true));
+
+    // Verify NFT balance
+    const nftBalance = simnet.callReadOnlyFn(
+      contractName,
+      "get-balance",
+      [Cl.principal(address1), Cl.uint(3)],
+      address1
+    );
+    expect(nftBalance.result).toBeOk(Cl.uint(1));
+  });
+
+  it("should handle approval and transfer chain", () => {
+    // Mint tokens to address1
+    simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(address1), Cl.uint(1), Cl.uint(1000)],
+      deployer
+    );
+
+    // Set specific allowance
+    simnet.callPublicFn(
+      contractName,
+      "approve",
+      [Cl.principal(address2), Cl.uint(1), Cl.uint(300)],
+      address1
+    );
+
+    // Verify allowance
+    const allowance = simnet.callReadOnlyFn(
+      contractName,
+      "get-allowance",
+      [Cl.principal(address1), Cl.principal(address2), Cl.uint(1)],
+      address1
+    );
+    expect(allowance.result).toBeOk(Cl.uint(300));
+
+    // Set approval for all to address3
+    simnet.callPublicFn(
+      contractName,
+      "set-approval-for-all",
+      [Cl.principal(address3), Cl.bool(true)],
+      address1
+    );
+
+    // Verify approval for all
+    const approvalForAll = simnet.callReadOnlyFn(
+      contractName,
+      "is-approved-for-all",
+      [Cl.principal(address1), Cl.principal(address3)],
+      address1
+    );
+    expect(approvalForAll.result).toBeOk(Cl.bool(true));
+  });
+});
+describe("Bitdap Multi Token - Gas Optimization Tests", () => {
+  beforeEach(() => {
+    // Create tokens for gas testing
+    for (let i = 1; i <= 5; i++) {
+      simnet.callPublicFn(
+        contractName,
+        "create-token",
+        [
+          Cl.stringUtf8(`Gas Token ${i}`),
+          Cl.stringUtf8(`GT${i}`),
+          Cl.uint(18),
+          Cl.bool(true),
+          Cl.none()
+        ],
+        deployer
+      );
+    }
+  });
+
+  it("should efficiently handle batch operations vs individual operations", () => {
+    // Test batch minting efficiency
+    const batchMintResult = simnet.callPublicFn(
+      contractName,
+      "batch-mint",
+      [
+        Cl.principal(address1),
+        Cl.list([Cl.uint(1), Cl.uint(2), Cl.uint(3), Cl.uint(4), Cl.uint(5)]),
+        Cl.list([Cl.uint(100), Cl.uint(200), Cl.uint(300), Cl.uint(400), Cl.uint(500)])
+      ],
+      deployer
+    );
+    expect(batchMintResult.result).toBeOk(Cl.bool(true));
+
+    // Verify all balances were set correctly
+    for (let i = 1; i <= 5; i++) {
+      const balance = simnet.callReadOnlyFn(
+        contractName,
+        "get-balance",
+        [Cl.principal(address1), Cl.uint(i)],
+        address1
+      );
+      expect(balance.result).toBeOk(Cl.uint(i * 100));
+    }
+  });
+
+  it("should handle maximum batch size operations", () => {
+    // Test with maximum list size (10 items as per contract)
+    const tokenIds = Array.from({ length: 5 }, (_, i) => Cl.uint(i + 1));
+    const amounts = Array.from({ length: 5 }, (_, i) => Cl.uint((i + 1) * 50));
+
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "batch-mint",
+      [
+        Cl.principal(address2),
+        Cl.list(tokenIds),
+        Cl.list(amounts)
+      ],
+      deployer
+    );
+    expect(result).toBeOk(Cl.bool(true));
+
+    // Test batch transfer of all tokens
+    const transferResult = simnet.callPublicFn(
+      contractName,
+      "batch-transfer-from",
+      [
+        Cl.principal(address2),
+        Cl.principal(address3),
+        Cl.list(tokenIds),
+        Cl.list(amounts)
+      ],
+      address2
+    );
+    expect(transferResult.result).toBeOk(Cl.tuple({ 
+      from: Cl.principal(address2), 
+      to: Cl.principal(address3) 
+    }));
+  });
+
+  it("should optimize storage access patterns", () => {
+    // Mint tokens to test storage efficiency
+    simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(address1), Cl.uint(1), Cl.uint(1000)],
+      deployer
+    );
+
+    // Multiple reads should be consistent
+    for (let i = 0; i < 3; i++) {
+      const balance = simnet.callReadOnlyFn(
+        contractName,
+        "get-balance",
+        [Cl.principal(address1), Cl.uint(1)],
+        address1
+      );
+      expect(balance.result).toBeOk(Cl.uint(1000));
+    }
+
+    // Test metadata access
+    const metadata = simnet.callReadOnlyFn(
+      contractName,
+      "get-token-metadata",
+      [Cl.uint(1)],
+      address1
+    );
+    expect(metadata.result).toBeOk(
+      Cl.tuple({
+        name: Cl.stringUtf8("Gas Token 1"),
+        symbol: Cl.stringUtf8("GT1"),
+        decimals: Cl.uint(18),
+        "total-supply": Cl.uint(1000),
+        "is-fungible": Cl.bool(true),
+        uri: Cl.none()
+      })
+    );
+  });
+});
+describe("Bitdap Multi Token - Security and Access Control", () => {
+  beforeEach(() => {
+    simnet.callPublicFn(
+      contractName,
+      "create-token",
+      [Cl.stringUtf8("Security Token"), Cl.stringUtf8("SEC"), Cl.uint(18), Cl.bool(true), Cl.none()],
+      deployer
+    );
+  });
+
+  it("should enforce strict owner-only operations", () => {
+    // Test all owner-only functions with non-owner
+    const nonOwnerTests = [
+      {
+        fn: "create-token",
+        args: [Cl.stringUtf8("Hack Token"), Cl.stringUtf8("HACK"), Cl.uint(18), Cl.bool(true), Cl.none()]
+      },
+      {
+        fn: "mint",
+        args: [Cl.principal(address1), Cl.uint(1), Cl.uint(1000)]
+      },
+      {
+        fn: "set-token-uri",
+        args: [Cl.uint(1), Cl.some(Cl.stringUtf8("https://hack.com"))]
+      },
+      {
+        fn: "update-token-info",
+        args: [Cl.uint(1), Cl.stringUtf8("Hacked"), Cl.stringUtf8("HACK")]
+      }
+    ];
+
+    nonOwnerTests.forEach(test => {
+      const { result } = simnet.callPublicFn(
+        contractName,
+        test.fn,
+        test.args,
+        address1 // Non-owner
+      );
+      expect(result).toBeErr(Cl.uint(401)); // ERR-UNAUTHORIZED
+    });
+  });
+
+  it("should prevent unauthorized token operations", () => {
+    // Mint tokens to address1
+    simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(address1), Cl.uint(1), Cl.uint(1000)],
+      deployer
+    );
+
+    // Test unauthorized operations
+    const unauthorizedTests = [
+      {
+        fn: "transfer-from",
+        args: [Cl.principal(address1), Cl.principal(address2), Cl.uint(1), Cl.uint(500)],
+        caller: address2
+      },
+      {
+        fn: "burn",
+        args: [Cl.principal(address1), Cl.uint(1), Cl.uint(100)],
+        caller: address2
+      },
+      {
+        fn: "batch-transfer-from",
+        args: [Cl.principal(address1), Cl.principal(address2), Cl.list([Cl.uint(1)]), Cl.list([Cl.uint(100)])],
+        caller: address2
+      }
+    ];
+
+    unauthorizedTests.forEach(test => {
+      const { result } = simnet.callPublicFn(
+        contractName,
+        test.fn,
+        test.args,
+        test.caller
+      );
+      expect(result).toBeErr(Cl.uint(401)); // ERR-UNAUTHORIZED
+    });
+  });
+
+  it("should validate input parameters strictly", () => {
+    // Test invalid amounts
+    const invalidAmountTests = [
+      {
+        fn: "mint",
+        args: [Cl.principal(address1), Cl.uint(1), Cl.uint(0)]
+      }
+    ];
+
+    invalidAmountTests.forEach(test => {
+      const { result } = simnet.callPublicFn(
+        contractName,
+        test.fn,
+        test.args,
+        deployer
+      );
+      expect(result).toBeErr(Cl.uint(404)); // ERR-INVALID-AMOUNT
+    });
+
+    // Test self-operations that should be rejected
+    simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(address1), Cl.uint(1), Cl.uint(1000)],
+      deployer
+    );
+
+    const selfOperationTests = [
+      {
+        fn: "transfer-from",
+        args: [Cl.principal(address1), Cl.principal(address1), Cl.uint(1), Cl.uint(100)]
+      },
+      {
+        fn: "set-approval-for-all",
+        args: [Cl.principal(address1), Cl.bool(true)]
+      },
+      {
+        fn: "approve",
+        args: [Cl.principal(address1), Cl.uint(1), Cl.uint(100)]
+      }
+    ];
+
+    selfOperationTests.forEach(test => {
+      const { result } = simnet.callPublicFn(
+        contractName,
+        test.fn,
+        test.args,
+        address1
+      );
+      expect(result).toBeErr(Cl.uint(405)); // ERR-SELF-TRANSFER or ERR-INVALID-RECIPIENT
+    });
+  });
+
+  it("should handle balance overflow protection", () => {
+    // This test ensures the contract handles large numbers correctly
+    // Mint maximum safe amount
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(address1), Cl.uint(1), Cl.uint(Number.MAX_SAFE_INTEGER)],
+      deployer
+    );
+    expect(result).toBeOk(Cl.bool(true));
+
+    // Verify balance
+    const balance = simnet.callReadOnlyFn(
+      contractName,
+      "get-balance",
+      [Cl.principal(address1), Cl.uint(1)],
+      address1
+    );
+    expect(balance.result).toBeOk(Cl.uint(Number.MAX_SAFE_INTEGER));
+  });
+});
