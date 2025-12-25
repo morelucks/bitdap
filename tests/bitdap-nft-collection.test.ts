@@ -341,3 +341,137 @@ describe("Bitdap NFT Collection - Transfer Functionality", () => {
     expect(ownerResult.result).toBeOk(Cl.some(Cl.principal(address2)));
   });
 });
+describe("Bitdap NFT Collection - Approval System", () => {
+  beforeEach(() => {
+    // Mint NFT for approval tests
+    simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(address1), Cl.some(Cl.stringUtf8("https://example.com/nft/1.json"))],
+      deployer
+    );
+  });
+
+  it("should allow owner to approve another address for specific token", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "approve",
+      [Cl.uint(1), Cl.principal(address2)],
+      address1
+    );
+    expect(result).toBeOk(Cl.bool(true));
+
+    // Check approval
+    const approvalResult = simnet.callReadOnlyFn(
+      contractName,
+      "get-approved",
+      [Cl.uint(1)],
+      address1
+    );
+    expect(approvalResult.result).toBeOk(Cl.some(Cl.principal(address2)));
+  });
+
+  it("should allow setting approval for all tokens", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "set-approval-for-all",
+      [Cl.principal(address2), Cl.bool(true)],
+      address1
+    );
+    expect(result).toBeOk(Cl.bool(true));
+
+    // Check approval for all
+    const approvalResult = simnet.callReadOnlyFn(
+      contractName,
+      "is-approved-for-all-query",
+      [Cl.principal(address1), Cl.principal(address2)],
+      address1
+    );
+    expect(approvalResult.result).toBeOk(Cl.bool(true));
+  });
+
+  it("should allow approved address to transfer token", () => {
+    // Approve address2
+    simnet.callPublicFn(
+      contractName,
+      "approve",
+      [Cl.uint(1), Cl.principal(address2)],
+      address1
+    );
+
+    // Transfer from approved address
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "transfer-from",
+      [Cl.uint(1), Cl.principal(address1), Cl.principal(address3)],
+      address2
+    );
+    expect(result).toBeOk(Cl.bool(true));
+
+    // Verify transfer
+    const ownerResult = simnet.callReadOnlyFn(
+      contractName,
+      "get-owner",
+      [Cl.uint(1)],
+      address1
+    );
+    expect(ownerResult.result).toBeOk(Cl.some(Cl.principal(address3)));
+  });
+
+  it("should clear approval after transfer", () => {
+    // Approve address2
+    simnet.callPublicFn(
+      contractName,
+      "approve",
+      [Cl.uint(1), Cl.principal(address2)],
+      address1
+    );
+
+    // Transfer from approved address
+    simnet.callPublicFn(
+      contractName,
+      "transfer-from",
+      [Cl.uint(1), Cl.principal(address1), Cl.principal(address3)],
+      address2
+    );
+
+    // Check approval is cleared
+    const approvalResult = simnet.callReadOnlyFn(
+      contractName,
+      "get-approved",
+      [Cl.uint(1)],
+      address1
+    );
+    expect(approvalResult.result).toBeOk(Cl.none());
+  });
+
+  it("should reject approval from non-owner", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "approve",
+      [Cl.uint(1), Cl.principal(address3)],
+      address2 // Non-owner
+    );
+    expect(result).toBeErr(Cl.uint(401)); // ERR-UNAUTHORIZED
+  });
+
+  it("should reject self-approval", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "approve",
+      [Cl.uint(1), Cl.principal(address1)],
+      address1 // Self-approval
+    );
+    expect(result).toBeErr(Cl.uint(407)); // ERR-SELF-TRANSFER
+  });
+
+  it("should reject approval for non-existent token", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "approve",
+      [Cl.uint(999), Cl.principal(address2)],
+      address1
+    );
+    expect(result).toBeErr(Cl.uint(404)); // ERR-NOT-FOUND
+  });
+});
