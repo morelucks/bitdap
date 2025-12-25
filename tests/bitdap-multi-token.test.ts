@@ -1827,3 +1827,158 @@ describe("Bitdap Multi Token - Gas Optimization Tests", () => {
     );
   });
 });
+describe("Bitdap Multi Token - Security and Access Control", () => {
+  beforeEach(() => {
+    simnet.callPublicFn(
+      contractName,
+      "create-token",
+      [Cl.stringUtf8("Security Token"), Cl.stringUtf8("SEC"), Cl.uint(18), Cl.bool(true), Cl.none()],
+      deployer
+    );
+  });
+
+  it("should enforce strict owner-only operations", () => {
+    // Test all owner-only functions with non-owner
+    const nonOwnerTests = [
+      {
+        fn: "create-token",
+        args: [Cl.stringUtf8("Hack Token"), Cl.stringUtf8("HACK"), Cl.uint(18), Cl.bool(true), Cl.none()]
+      },
+      {
+        fn: "mint",
+        args: [Cl.principal(address1), Cl.uint(1), Cl.uint(1000)]
+      },
+      {
+        fn: "set-token-uri",
+        args: [Cl.uint(1), Cl.some(Cl.stringUtf8("https://hack.com"))]
+      },
+      {
+        fn: "update-token-info",
+        args: [Cl.uint(1), Cl.stringUtf8("Hacked"), Cl.stringUtf8("HACK")]
+      }
+    ];
+
+    nonOwnerTests.forEach(test => {
+      const { result } = simnet.callPublicFn(
+        contractName,
+        test.fn,
+        test.args,
+        address1 // Non-owner
+      );
+      expect(result).toBeErr(Cl.uint(401)); // ERR-UNAUTHORIZED
+    });
+  });
+
+  it("should prevent unauthorized token operations", () => {
+    // Mint tokens to address1
+    simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(address1), Cl.uint(1), Cl.uint(1000)],
+      deployer
+    );
+
+    // Test unauthorized operations
+    const unauthorizedTests = [
+      {
+        fn: "transfer-from",
+        args: [Cl.principal(address1), Cl.principal(address2), Cl.uint(1), Cl.uint(500)],
+        caller: address2
+      },
+      {
+        fn: "burn",
+        args: [Cl.principal(address1), Cl.uint(1), Cl.uint(100)],
+        caller: address2
+      },
+      {
+        fn: "batch-transfer-from",
+        args: [Cl.principal(address1), Cl.principal(address2), Cl.list([Cl.uint(1)]), Cl.list([Cl.uint(100)])],
+        caller: address2
+      }
+    ];
+
+    unauthorizedTests.forEach(test => {
+      const { result } = simnet.callPublicFn(
+        contractName,
+        test.fn,
+        test.args,
+        test.caller
+      );
+      expect(result).toBeErr(Cl.uint(401)); // ERR-UNAUTHORIZED
+    });
+  });
+
+  it("should validate input parameters strictly", () => {
+    // Test invalid amounts
+    const invalidAmountTests = [
+      {
+        fn: "mint",
+        args: [Cl.principal(address1), Cl.uint(1), Cl.uint(0)]
+      }
+    ];
+
+    invalidAmountTests.forEach(test => {
+      const { result } = simnet.callPublicFn(
+        contractName,
+        test.fn,
+        test.args,
+        deployer
+      );
+      expect(result).toBeErr(Cl.uint(404)); // ERR-INVALID-AMOUNT
+    });
+
+    // Test self-operations that should be rejected
+    simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(address1), Cl.uint(1), Cl.uint(1000)],
+      deployer
+    );
+
+    const selfOperationTests = [
+      {
+        fn: "transfer-from",
+        args: [Cl.principal(address1), Cl.principal(address1), Cl.uint(1), Cl.uint(100)]
+      },
+      {
+        fn: "set-approval-for-all",
+        args: [Cl.principal(address1), Cl.bool(true)]
+      },
+      {
+        fn: "approve",
+        args: [Cl.principal(address1), Cl.uint(1), Cl.uint(100)]
+      }
+    ];
+
+    selfOperationTests.forEach(test => {
+      const { result } = simnet.callPublicFn(
+        contractName,
+        test.fn,
+        test.args,
+        address1
+      );
+      expect(result).toBeErr(Cl.uint(405)); // ERR-SELF-TRANSFER or ERR-INVALID-RECIPIENT
+    });
+  });
+
+  it("should handle balance overflow protection", () => {
+    // This test ensures the contract handles large numbers correctly
+    // Mint maximum safe amount
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(address1), Cl.uint(1), Cl.uint(Number.MAX_SAFE_INTEGER)],
+      deployer
+    );
+    expect(result).toBeOk(Cl.bool(true));
+
+    // Verify balance
+    const balance = simnet.callReadOnlyFn(
+      contractName,
+      "get-balance",
+      [Cl.principal(address1), Cl.uint(1)],
+      address1
+    );
+    expect(balance.result).toBeOk(Cl.uint(Number.MAX_SAFE_INTEGER));
+  });
+});
