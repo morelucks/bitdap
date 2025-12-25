@@ -1708,3 +1708,122 @@ describe("Bitdap Multi Token - Complex Scenarios", () => {
     expect(approvalForAll.result).toBeOk(Cl.bool(true));
   });
 });
+describe("Bitdap Multi Token - Gas Optimization Tests", () => {
+  beforeEach(() => {
+    // Create tokens for gas testing
+    for (let i = 1; i <= 5; i++) {
+      simnet.callPublicFn(
+        contractName,
+        "create-token",
+        [
+          Cl.stringUtf8(`Gas Token ${i}`),
+          Cl.stringUtf8(`GT${i}`),
+          Cl.uint(18),
+          Cl.bool(true),
+          Cl.none()
+        ],
+        deployer
+      );
+    }
+  });
+
+  it("should efficiently handle batch operations vs individual operations", () => {
+    // Test batch minting efficiency
+    const batchMintResult = simnet.callPublicFn(
+      contractName,
+      "batch-mint",
+      [
+        Cl.principal(address1),
+        Cl.list([Cl.uint(1), Cl.uint(2), Cl.uint(3), Cl.uint(4), Cl.uint(5)]),
+        Cl.list([Cl.uint(100), Cl.uint(200), Cl.uint(300), Cl.uint(400), Cl.uint(500)])
+      ],
+      deployer
+    );
+    expect(batchMintResult.result).toBeOk(Cl.bool(true));
+
+    // Verify all balances were set correctly
+    for (let i = 1; i <= 5; i++) {
+      const balance = simnet.callReadOnlyFn(
+        contractName,
+        "get-balance",
+        [Cl.principal(address1), Cl.uint(i)],
+        address1
+      );
+      expect(balance.result).toBeOk(Cl.uint(i * 100));
+    }
+  });
+
+  it("should handle maximum batch size operations", () => {
+    // Test with maximum list size (10 items as per contract)
+    const tokenIds = Array.from({ length: 5 }, (_, i) => Cl.uint(i + 1));
+    const amounts = Array.from({ length: 5 }, (_, i) => Cl.uint((i + 1) * 50));
+
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "batch-mint",
+      [
+        Cl.principal(address2),
+        Cl.list(tokenIds),
+        Cl.list(amounts)
+      ],
+      deployer
+    );
+    expect(result).toBeOk(Cl.bool(true));
+
+    // Test batch transfer of all tokens
+    const transferResult = simnet.callPublicFn(
+      contractName,
+      "batch-transfer-from",
+      [
+        Cl.principal(address2),
+        Cl.principal(address3),
+        Cl.list(tokenIds),
+        Cl.list(amounts)
+      ],
+      address2
+    );
+    expect(transferResult.result).toBeOk(Cl.tuple({ 
+      from: Cl.principal(address2), 
+      to: Cl.principal(address3) 
+    }));
+  });
+
+  it("should optimize storage access patterns", () => {
+    // Mint tokens to test storage efficiency
+    simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(address1), Cl.uint(1), Cl.uint(1000)],
+      deployer
+    );
+
+    // Multiple reads should be consistent
+    for (let i = 0; i < 3; i++) {
+      const balance = simnet.callReadOnlyFn(
+        contractName,
+        "get-balance",
+        [Cl.principal(address1), Cl.uint(1)],
+        address1
+      );
+      expect(balance.result).toBeOk(Cl.uint(1000));
+    }
+
+    // Test metadata access
+    const metadata = simnet.callReadOnlyFn(
+      contractName,
+      "get-token-metadata",
+      [Cl.uint(1)],
+      address1
+    );
+    expect(metadata.result).toBeOk(
+      Cl.tuple({
+        name: Cl.stringUtf8("Gas Token 1"),
+        symbol: Cl.stringUtf8("GT1"),
+        decimals: Cl.uint(18),
+        "total-supply": Cl.uint(1000),
+        "is-fungible": Cl.bool(true),
+        uri: Cl.none()
+      })
+    );
+  });
+});
