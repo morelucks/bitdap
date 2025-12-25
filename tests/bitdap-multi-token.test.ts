@@ -743,3 +743,158 @@ describe("Bitdap Multi Token - Safe Transfer & Batch Transfer", () => {
     expect(result).toBeOk(Cl.tuple({ from: Cl.principal(address1), to: Cl.principal(address2) }));
   });
 });
+describe("Bitdap Multi Token - Approval System", () => {
+  beforeEach(() => {
+    // Create test token
+    simnet.callPublicFn(
+      contractName,
+      "create-token",
+      [Cl.stringUtf8("Approval Token"), Cl.stringUtf8("APPR"), Cl.uint(18), Cl.bool(true), Cl.none()],
+      deployer
+    );
+    
+    // Mint tokens to address1
+    simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(address1), Cl.uint(1), Cl.uint(1000)],
+      deployer
+    );
+  });
+
+  it("should allow setting approval for all tokens", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "set-approval-for-all",
+      [Cl.principal(address2), Cl.bool(true)],
+      address1
+    );
+    expect(result).toBeOk(Cl.bool(true));
+  });
+
+  it("should check approval for all tokens correctly", () => {
+    // Set approval
+    simnet.callPublicFn(
+      contractName,
+      "set-approval-for-all",
+      [Cl.principal(address2), Cl.bool(true)],
+      address1
+    );
+
+    // Check approval
+    const { result } = simnet.callReadOnlyFn(
+      contractName,
+      "is-approved-for-all",
+      [Cl.principal(address1), Cl.principal(address2)],
+      address1
+    );
+    expect(result).toBeOk(Cl.bool(true));
+  });
+
+  it("should return false for non-approved operator", () => {
+    const { result } = simnet.callReadOnlyFn(
+      contractName,
+      "is-approved-for-all",
+      [Cl.principal(address1), Cl.principal(address2)],
+      address1
+    );
+    expect(result).toBeOk(Cl.bool(false));
+  });
+
+  it("should reject self-approval for all", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "set-approval-for-all",
+      [Cl.principal(address1), Cl.bool(true)], // Self-approval
+      address1
+    );
+    expect(result).toBeErr(Cl.uint(406)); // ERR-INVALID-RECIPIENT
+  });
+
+  it("should allow setting specific token allowance", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "approve",
+      [Cl.principal(address2), Cl.uint(1), Cl.uint(500)],
+      address1
+    );
+    expect(result).toBeOk(Cl.bool(true));
+  });
+
+  it("should return correct allowance amount", () => {
+    // Set allowance
+    simnet.callPublicFn(
+      contractName,
+      "approve",
+      [Cl.principal(address2), Cl.uint(1), Cl.uint(300)],
+      address1
+    );
+
+    // Check allowance
+    const { result } = simnet.callReadOnlyFn(
+      contractName,
+      "get-allowance",
+      [Cl.principal(address1), Cl.principal(address2), Cl.uint(1)],
+      address1
+    );
+    expect(result).toBeOk(Cl.uint(300));
+  });
+
+  it("should return zero allowance for non-approved spender", () => {
+    const { result } = simnet.callReadOnlyFn(
+      contractName,
+      "get-allowance",
+      [Cl.principal(address1), Cl.principal(address2), Cl.uint(1)],
+      address1
+    );
+    expect(result).toBeOk(Cl.uint(0));
+  });
+
+  it("should reject approval for non-existent token", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "approve",
+      [Cl.principal(address2), Cl.uint(999), Cl.uint(500)],
+      address1
+    );
+    expect(result).toBeErr(Cl.uint(408)); // ERR-TOKEN-NOT-EXISTS
+  });
+
+  it("should reject self-approval for specific token", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "approve",
+      [Cl.principal(address1), Cl.uint(1), Cl.uint(500)], // Self-approval
+      address1
+    );
+    expect(result).toBeErr(Cl.uint(406)); // ERR-INVALID-RECIPIENT
+  });
+
+  it("should allow revoking approval by setting to false", () => {
+    // First set approval
+    simnet.callPublicFn(
+      contractName,
+      "set-approval-for-all",
+      [Cl.principal(address2), Cl.bool(true)],
+      address1
+    );
+
+    // Then revoke it
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "set-approval-for-all",
+      [Cl.principal(address2), Cl.bool(false)],
+      address1
+    );
+    expect(result).toBeOk(Cl.bool(true));
+
+    // Check that approval is revoked
+    const approvalResult = simnet.callReadOnlyFn(
+      contractName,
+      "is-approved-for-all",
+      [Cl.principal(address1), Cl.principal(address2)],
+      address1
+    );
+    expect(approvalResult.result).toBeOk(Cl.bool(false));
+  });
+});
