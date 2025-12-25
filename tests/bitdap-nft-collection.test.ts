@@ -3,6 +3,7 @@ import { Cl } from "@stacks/transactions";
 
 // Global declarations for Clarinet SDK
 declare const simnet: any;
+declare const TextEncoder: any;
 
 const accounts = simnet.getAccounts();
 const address1 = accounts.get("wallet_1")!;
