@@ -194,3 +194,135 @@ describe("Bitdap Multi Token - Token Creation", () => {
     expect(result).toBeOk(Cl.bool(false));
   });
 });
+describe("Bitdap Multi Token - Minting", () => {
+  beforeEach(() => {
+    // Create a test token before each minting test
+    simnet.callPublicFn(
+      contractName,
+      "create-token",
+      [
+        Cl.stringUtf8("Test Token"),
+        Cl.stringUtf8("TEST"),
+        Cl.uint(18),
+        Cl.bool(true),
+        Cl.none()
+      ],
+      deployer
+    );
+  });
+
+  it("should allow owner to mint tokens", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(address1), Cl.uint(1), Cl.uint(1000)],
+      deployer
+    );
+    expect(result).toBeOk(Cl.bool(true));
+  });
+
+  it("should update balance after minting", () => {
+    // Mint tokens
+    simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(address1), Cl.uint(1), Cl.uint(1000)],
+      deployer
+    );
+
+    // Check balance
+    const { result } = simnet.callReadOnlyFn(
+      contractName,
+      "get-balance",
+      [Cl.principal(address1), Cl.uint(1)],
+      address1
+    );
+    expect(result).toBeOk(Cl.uint(1000));
+  });
+
+  it("should update total supply after minting", () => {
+    // Mint tokens
+    simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(address1), Cl.uint(1), Cl.uint(500)],
+      deployer
+    );
+
+    // Check total supply
+    const { result } = simnet.callReadOnlyFn(
+      contractName,
+      "get-total-supply",
+      [Cl.uint(1)],
+      address1
+    );
+    expect(result).toBeOk(Cl.uint(500));
+  });
+
+  it("should reject minting from non-owner", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(address1), Cl.uint(1), Cl.uint(1000)],
+      address1
+    );
+    expect(result).toBeErr(Cl.uint(401)); // ERR-UNAUTHORIZED
+  });
+
+  it("should reject minting zero amount", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(address1), Cl.uint(1), Cl.uint(0)],
+      deployer
+    );
+    expect(result).toBeErr(Cl.uint(404)); // ERR-INVALID-AMOUNT
+  });
+
+  it("should reject minting for non-existent token", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(address1), Cl.uint(999), Cl.uint(1000)],
+      deployer
+    );
+    expect(result).toBeErr(Cl.uint(408)); // ERR-TOKEN-NOT-EXISTS
+  });
+
+  it("should accumulate balance on multiple mints", () => {
+    // First mint
+    simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(address1), Cl.uint(1), Cl.uint(500)],
+      deployer
+    );
+
+    // Second mint
+    simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(address1), Cl.uint(1), Cl.uint(300)],
+      deployer
+    );
+
+    // Check accumulated balance
+    const { result } = simnet.callReadOnlyFn(
+      contractName,
+      "get-balance",
+      [Cl.principal(address1), Cl.uint(1)],
+      address1
+    );
+    expect(result).toBeOk(Cl.uint(800));
+  });
+
+  it("should return zero balance for unminted tokens", () => {
+    const { result } = simnet.callReadOnlyFn(
+      contractName,
+      "get-balance",
+      [Cl.principal(address1), Cl.uint(1)],
+      address1
+    );
+    expect(result).toBeOk(Cl.uint(0));
+  });
+});
