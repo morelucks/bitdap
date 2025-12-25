@@ -1205,6 +1205,14 @@ describe("Bitdap NFT Collection - Fund Management", () => {
     );
     expect(result).toBeErr(Cl.uint(400)); // ERR-INVALID-AMOUNT
   });
+});et.callPublicFn(
+      contractName,
+      "withdraw-funds",
+      [Cl.uint(0)],
+      deployer
+    );
+    expect(result).toBeErr(Cl.uint(400)); // ERR-INVALID-AMOUNT
+  });
 });
 describe("Bitdap NFT Collection - Query Functions and Edge Cases", () => {
   beforeEach(() => {
