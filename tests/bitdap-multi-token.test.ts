@@ -898,3 +898,129 @@ describe("Bitdap Multi Token - Approval System", () => {
     expect(approvalResult.result).toBeOk(Cl.bool(false));
   });
 });
+describe("Bitdap Multi Token - Burning", () => {
+  beforeEach(() => {
+    // Create test token
+    simnet.callPublicFn(
+      contractName,
+      "create-token",
+      [Cl.stringUtf8("Burn Token"), Cl.stringUtf8("BURN"), Cl.uint(18), Cl.bool(true), Cl.none()],
+      deployer
+    );
+    
+    // Mint tokens to address1
+    simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(address1), Cl.uint(1), Cl.uint(1000)],
+      deployer
+    );
+  });
+
+  it("should allow token owner to burn tokens", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "burn",
+      [Cl.principal(address1), Cl.uint(1), Cl.uint(300)],
+      address1
+    );
+    expect(result).toBeOk(Cl.bool(true));
+  });
+
+  it("should update balance after burning", () => {
+    // Burn tokens
+    simnet.callPublicFn(
+      contractName,
+      "burn",
+      [Cl.principal(address1), Cl.uint(1), Cl.uint(400)],
+      address1
+    );
+
+    // Check remaining balance
+    const { result } = simnet.callReadOnlyFn(
+      contractName,
+      "get-balance",
+      [Cl.principal(address1), Cl.uint(1)],
+      address1
+    );
+    expect(result).toBeOk(Cl.uint(600));
+  });
+
+  it("should update total supply after burning", () => {
+    // Burn tokens
+    simnet.callPublicFn(
+      contractName,
+      "burn",
+      [Cl.principal(address1), Cl.uint(1), Cl.uint(200)],
+      address1
+    );
+
+    // Check total supply
+    const { result } = simnet.callReadOnlyFn(
+      contractName,
+      "get-total-supply",
+      [Cl.uint(1)],
+      address1
+    );
+    expect(result).toBeOk(Cl.uint(800));
+  });
+
+  it("should reject burning with insufficient balance", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "burn",
+      [Cl.principal(address1), Cl.uint(1), Cl.uint(2000)], // More than balance
+      address1
+    );
+    expect(result).toBeErr(Cl.uint(402)); // ERR-INSUFFICIENT-BALANCE
+  });
+
+  it("should reject burning zero amount", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "burn",
+      [Cl.principal(address1), Cl.uint(1), Cl.uint(0)],
+      address1
+    );
+    expect(result).toBeErr(Cl.uint(404)); // ERR-INVALID-AMOUNT
+  });
+
+  it("should reject burning from unauthorized account", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "burn",
+      [Cl.principal(address1), Cl.uint(1), Cl.uint(300)],
+      address2 // address2 trying to burn address1's tokens
+    );
+    expect(result).toBeErr(Cl.uint(401)); // ERR-UNAUTHORIZED
+  });
+
+  it("should allow approved operator to burn tokens", () => {
+    // Set approval for all
+    simnet.callPublicFn(
+      contractName,
+      "set-approval-for-all",
+      [Cl.principal(address2), Cl.bool(true)],
+      address1
+    );
+
+    // Burn as approved operator
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "burn",
+      [Cl.principal(address1), Cl.uint(1), Cl.uint(250)],
+      address2
+    );
+    expect(result).toBeOk(Cl.bool(true));
+  });
+
+  it("should reject burning non-existent token", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "burn",
+      [Cl.principal(address1), Cl.uint(999), Cl.uint(100)],
+      address1
+    );
+    expect(result).toBeErr(Cl.uint(408)); // ERR-TOKEN-NOT-EXISTS
+  });
+});
