@@ -326,3 +326,148 @@ describe("Bitdap Multi Token - Minting", () => {
     expect(result).toBeOk(Cl.uint(0));
   });
 });
+describe("Bitdap Multi Token - Batch Minting", () => {
+  beforeEach(() => {
+    // Create multiple test tokens
+    simnet.callPublicFn(
+      contractName,
+      "create-token",
+      [
+        Cl.stringUtf8("Token 1"),
+        Cl.stringUtf8("T1"),
+        Cl.uint(18),
+        Cl.bool(true),
+        Cl.none()
+      ],
+      deployer
+    );
+    simnet.callPublicFn(
+      contractName,
+      "create-token",
+      [
+        Cl.stringUtf8("Token 2"),
+        Cl.stringUtf8("T2"),
+        Cl.uint(6),
+        Cl.bool(true),
+        Cl.none()
+      ],
+      deployer
+    );
+    simnet.callPublicFn(
+      contractName,
+      "create-token",
+      [
+        Cl.stringUtf8("Token 3"),
+        Cl.stringUtf8("T3"),
+        Cl.uint(0),
+        Cl.bool(false),
+        Cl.none()
+      ],
+      deployer
+    );
+  });
+
+  it("should allow owner to batch mint multiple tokens", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "batch-mint",
+      [
+        Cl.principal(address1),
+        Cl.list([Cl.uint(1), Cl.uint(2), Cl.uint(3)]),
+        Cl.list([Cl.uint(1000), Cl.uint(500), Cl.uint(1)])
+      ],
+      deployer
+    );
+    expect(result).toBeOk(Cl.bool(true));
+  });
+
+  it("should reject batch mint from non-owner", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "batch-mint",
+      [
+        Cl.principal(address1),
+        Cl.list([Cl.uint(1), Cl.uint(2)]),
+        Cl.list([Cl.uint(1000), Cl.uint(500)])
+      ],
+      address1
+    );
+    expect(result).toBeErr(Cl.uint(401)); // ERR-UNAUTHORIZED
+  });
+
+  it("should reject batch mint with mismatched array lengths", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "batch-mint",
+      [
+        Cl.principal(address1),
+        Cl.list([Cl.uint(1), Cl.uint(2), Cl.uint(3)]),
+        Cl.list([Cl.uint(1000), Cl.uint(500)]) // Mismatched length
+      ],
+      deployer
+    );
+    expect(result).toBeErr(Cl.uint(404)); // ERR-INVALID-AMOUNT
+  });
+
+  it("should update balances correctly after batch mint", () => {
+    // Batch mint
+    simnet.callPublicFn(
+      contractName,
+      "batch-mint",
+      [
+        Cl.principal(address1),
+        Cl.list([Cl.uint(1), Cl.uint(2), Cl.uint(3)]),
+        Cl.list([Cl.uint(1000), Cl.uint(500), Cl.uint(1)])
+      ],
+      deployer
+    );
+
+    // Check individual balances
+    const balance1 = simnet.callReadOnlyFn(
+      contractName,
+      "get-balance",
+      [Cl.principal(address1), Cl.uint(1)],
+      address1
+    );
+    expect(balance1.result).toBeOk(Cl.uint(1000));
+
+    const balance2 = simnet.callReadOnlyFn(
+      contractName,
+      "get-balance",
+      [Cl.principal(address1), Cl.uint(2)],
+      address1
+    );
+    expect(balance2.result).toBeOk(Cl.uint(500));
+
+    const balance3 = simnet.callReadOnlyFn(
+      contractName,
+      "get-balance",
+      [Cl.principal(address1), Cl.uint(3)],
+      address1
+    );
+    expect(balance3.result).toBeOk(Cl.uint(1));
+  });
+
+  it("should handle zero amounts in batch mint", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "batch-mint",
+      [
+        Cl.principal(address1),
+        Cl.list([Cl.uint(1), Cl.uint(2), Cl.uint(3)]),
+        Cl.list([Cl.uint(1000), Cl.uint(0), Cl.uint(1)]) // Zero amount for token 2
+      ],
+      deployer
+    );
+    expect(result).toBeOk(Cl.bool(true));
+
+    // Check that token 2 has zero balance
+    const balance2 = simnet.callReadOnlyFn(
+      contractName,
+      "get-balance",
+      [Cl.principal(address1), Cl.uint(2)],
+      address1
+    );
+    expect(balance2.result).toBeOk(Cl.uint(0));
+  });
+});
