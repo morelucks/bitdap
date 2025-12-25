@@ -1482,3 +1482,79 @@ describe("Bitdap Multi Token - Edge Cases and Error Handling", () => {
     expect(balance3.result).toBeOk(Cl.uint(50));
   });
 });
+describe("Bitdap Multi Token - Event Emission Tests", () => {
+  beforeEach(() => {
+    simnet.callPublicFn(
+      contractName,
+      "create-token",
+      [Cl.stringUtf8("Event Token"), Cl.stringUtf8("EVENT"), Cl.uint(18), Cl.bool(true), Cl.none()],
+      deployer
+    );
+  });
+
+  it("should emit events on token creation", () => {
+    const { result, events } = simnet.callPublicFn(
+      contractName,
+      "create-token",
+      [Cl.stringUtf8("New Token"), Cl.stringUtf8("NEW"), Cl.uint(6), Cl.bool(true), Cl.none()],
+      deployer
+    );
+    
+    expect(result).toBeOk(Cl.uint(2));
+    expect(events.length).toBeGreaterThan(0);
+    
+    // Check that creation event was emitted
+    const hasCreationEvent = events.some((e: any) => {
+      const eventStr = JSON.stringify(e);
+      return eventStr.includes("create-token") || eventStr.includes("New Token");
+    });
+    expect(hasCreationEvent).toBe(true);
+  });
+
+  it("should emit events on minting", () => {
+    const { result, events } = simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(address1), Cl.uint(1), Cl.uint(500)],
+      deployer
+    );
+    
+    expect(result).toBeOk(Cl.bool(true));
+    expect(events.length).toBeGreaterThan(0);
+    
+    // Check that mint event was emitted
+    const hasMintEvent = events.some((e: any) => {
+      const eventStr = JSON.stringify(e);
+      return eventStr.includes("mint") || eventStr.includes("500");
+    });
+    expect(hasMintEvent).toBe(true);
+  });
+
+  it("should emit events on transfers", () => {
+    // First mint tokens
+    simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(address1), Cl.uint(1), Cl.uint(1000)],
+      deployer
+    );
+
+    // Then transfer
+    const { result, events } = simnet.callPublicFn(
+      contractName,
+      "transfer-from",
+      [Cl.principal(address1), Cl.principal(address2), Cl.uint(1), Cl.uint(300)],
+      address1
+    );
+    
+    expect(result).toBeOk(Cl.bool(true));
+    expect(events.length).toBeGreaterThan(0);
+    
+    // Check that transfer event was emitted
+    const hasTransferEvent = events.some((e: any) => {
+      const eventStr = JSON.stringify(e);
+      return eventStr.includes("transfer") || eventStr.includes("300");
+    });
+    expect(hasTransferEvent).toBe(true);
+  });
+});
