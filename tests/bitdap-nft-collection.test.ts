@@ -242,3 +242,102 @@ describe("Bitdap NFT Collection - Minting Functionality", () => {
     expect(result).toBeErr(Cl.uint(406)); // ERR-CONTRACT-PAUSED
   });
 });
+describe("Bitdap NFT Collection - Transfer Functionality", () => {
+  beforeEach(() => {
+    // Mint NFT for transfer tests
+    simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(address1), Cl.some(Cl.stringUtf8("https://example.com/nft/1.json"))],
+      deployer
+    );
+  });
+
+  it("should allow owner to transfer NFT", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "transfer",
+      [Cl.uint(1), Cl.principal(address1), Cl.principal(address2)],
+      address1
+    );
+    expect(result).toBeOk(Cl.bool(true));
+
+    // Verify new owner
+    const ownerResult = simnet.callReadOnlyFn(
+      contractName,
+      "get-owner",
+      [Cl.uint(1)],
+      address1
+    );
+    expect(ownerResult.result).toBeOk(Cl.some(Cl.principal(address2)));
+  });
+
+  it("should reject transfer from non-owner", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "transfer",
+      [Cl.uint(1), Cl.principal(address1), Cl.principal(address2)],
+      address2 // Non-owner trying to transfer
+    );
+    expect(result).toBeErr(Cl.uint(401)); // ERR-UNAUTHORIZED
+  });
+
+  it("should reject self-transfer", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "transfer",
+      [Cl.uint(1), Cl.principal(address1), Cl.principal(address1)],
+      address1
+    );
+    expect(result).toBeErr(Cl.uint(407)); // ERR-SELF-TRANSFER
+  });
+
+  it("should reject transfer of non-existent token", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "transfer",
+      [Cl.uint(999), Cl.principal(address1), Cl.principal(address2)],
+      address1
+    );
+    expect(result).toBeErr(Cl.uint(404)); // ERR-NOT-FOUND
+  });
+
+  it("should reject transfer when contract is paused", () => {
+    // Pause contract
+    simnet.callPublicFn(
+      contractName,
+      "pause-contract",
+      [],
+      deployer
+    );
+
+    // Try to transfer
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "transfer",
+      [Cl.uint(1), Cl.principal(address1), Cl.principal(address2)],
+      address1
+    );
+    expect(result).toBeErr(Cl.uint(406)); // ERR-CONTRACT-PAUSED
+  });
+
+  it("should support transfer with memo", () => {
+    const memo = new TextEncoder().encode("Transfer memo");
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "transfer-memo",
+      [Cl.uint(1), Cl.principal(address1), Cl.principal(address2), Cl.buffer(memo)],
+      address1
+    );
+    expect(result).toBeOk(Cl.bool(true));
+
+    // Verify transfer occurred
+    const ownerResult = simnet.callReadOnlyFn(
+      contractName,
+      "get-owner",
+      [Cl.uint(1)],
+      address1
+    );
+    expect(ownerResult.result).toBeOk(Cl.some(Cl.principal(address2)));
+  });
+});
