@@ -1202,3 +1202,231 @@ describe("Bitdap NFT Collection - Fund Management", () => {
     expect(result).toBeErr(Cl.uint(400)); // ERR-INVALID-AMOUNT
   });
 });
+describe("Bitdap NFT Collection - Query Functions and Edge Cases", () => {
+  beforeEach(() => {
+    // Mint some NFTs for query tests
+    simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(address1), Cl.some(Cl.stringUtf8("https://example.com/nft/1.json"))],
+      deployer
+    );
+    simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(address2), Cl.some(Cl.stringUtf8("https://example.com/nft/2.json"))],
+      deployer
+    );
+  });
+
+  it("should return comprehensive collection information", () => {
+    const { result } = simnet.callReadOnlyFn(
+      contractName,
+      "get-collection-info",
+      [],
+      address1
+    );
+    expect(result).toBeOk(
+      Cl.tuple({
+        name: Cl.stringAscii("Bitdap NFT Collection"),
+        symbol: Cl.stringAscii("BDNFT"),
+        description: Cl.stringUtf8("General-purpose NFT collection for Bitdap ecosystem"),
+        uri: Cl.none(),
+        "total-supply": Cl.uint(2),
+        "max-supply": Cl.uint(10000),
+        "remaining-supply": Cl.uint(9998),
+        owner: Cl.principal(deployer),
+        "minting-enabled": Cl.bool(true)
+      })
+    );
+  });
+
+  it("should return detailed token information", () => {
+    const { result } = simnet.callReadOnlyFn(
+      contractName,
+      "get-token-info-detailed",
+      [Cl.uint(1)],
+      address1
+    );
+    expect(result).toBeOk(
+      Cl.tuple({
+        "token-id": Cl.uint(1),
+        owner: Cl.some(Cl.tuple({ owner: Cl.principal(address1) })),
+        metadata: Cl.some(Cl.tuple({ uri: Cl.some(Cl.stringUtf8("https://example.com/nft/1.json")) })),
+        approved: Cl.none(),
+        exists: Cl.bool(true)
+      })
+    );
+  });
+
+  it("should return batch token information", () => {
+    const { result } = simnet.callReadOnlyFn(
+      contractName,
+      "get-tokens-info-detailed",
+      [Cl.list([Cl.uint(1), Cl.uint(2)])],
+      address1
+    );
+    
+    // Should return list of token info
+    expect(result).toBeOk(Cl.list([
+      Cl.tuple({
+        "token-id": Cl.uint(1),
+        owner: Cl.some(Cl.tuple({ owner: Cl.principal(address1) })),
+        metadata: Cl.some(Cl.tuple({ uri: Cl.some(Cl.stringUtf8("https://example.com/nft/1.json")) })),
+        approved: Cl.none(),
+        exists: Cl.bool(true)
+      }),
+      Cl.tuple({
+        "token-id": Cl.uint(2),
+        owner: Cl.some(Cl.tuple({ owner: Cl.principal(address2) })),
+        metadata: Cl.some(Cl.tuple({ uri: Cl.some(Cl.stringUtf8("https://example.com/nft/2.json")) })),
+        approved: Cl.none(),
+        exists: Cl.bool(true)
+      })
+    ]));
+  });
+
+  it("should return mint count for addresses", () => {
+    const { result } = simnet.callReadOnlyFn(
+      contractName,
+      "get-address-mint-count",
+      [Cl.principal(address1)],
+      address1
+    );
+    expect(result).toBeOk(Cl.uint(1));
+
+    const result2 = simnet.callReadOnlyFn(
+      contractName,
+      "get-address-mint-count",
+      [Cl.principal(address3)], // Never minted
+      address1
+    );
+    expect(result2.result).toBeOk(Cl.uint(0));
+  });
+
+  it("should handle queries for non-existent tokens", () => {
+    const ownerResult = simnet.callReadOnlyFn(
+      contractName,
+      "get-owner",
+      [Cl.uint(999)],
+      address1
+    );
+    expect(ownerResult.result).toBeOk(Cl.none());
+
+    const uriResult = simnet.callReadOnlyFn(
+      contractName,
+      "get-token-uri",
+      [Cl.uint(999)],
+      address1
+    );
+    expect(uriResult.result).toBeOk(Cl.none());
+
+    const existsResult = simnet.callReadOnlyFn(
+      contractName,
+      "token-exists?",
+      [Cl.uint(999)],
+      address1
+    );
+    expect(existsResult.result).toBeBool(false);
+  });
+
+  it("should handle safe mint with validation", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "safe-mint",
+      [Cl.principal(address3), Cl.some(Cl.stringUtf8("https://example.com/safe/1.json"))],
+      deployer
+    );
+    expect(result).toBeOk(Cl.uint(3));
+
+    // Verify safe mint worked
+    const ownerResult = simnet.callReadOnlyFn(
+      contractName,
+      "get-owner",
+      [Cl.uint(3)],
+      address1
+    );
+    expect(ownerResult.result).toBeOk(Cl.some(Cl.principal(address3)));
+  });
+
+  it("should handle mint with events", () => {
+    const { result, events } = simnet.callPublicFn(
+      contractName,
+      "mint-with-events",
+      [Cl.principal(address3), Cl.some(Cl.stringUtf8("https://example.com/events/1.json"))],
+      deployer
+    );
+    expect(result).toBeOk(Cl.uint(3));
+    expect(events.length).toBeGreaterThan(0);
+
+    // Check that events were emitted
+    const hasMintEvent = events.some((e: any) => {
+      const eventStr = JSON.stringify(e);
+      return eventStr.includes("mint-success") || eventStr.includes("mint");
+    });
+    expect(hasMintEvent).toBe(true);
+  });
+
+  it("should handle emergency pause with reason", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "emergency-pause",
+      [Cl.stringUtf8("Security incident detected")],
+      deployer
+    );
+    expect(result).toBeOk(Cl.bool(true));
+
+    // Verify contract is paused
+    const statusResult = simnet.callReadOnlyFn(
+      contractName,
+      "get-contract-status",
+      [],
+      address1
+    );
+    expect(statusResult.result).toBeOk(
+      Cl.tuple({
+        paused: Cl.bool(true),
+        "minting-enabled": Cl.bool(true),
+        owner: Cl.principal(deployer)
+      })
+    );
+  });
+
+  it("should enforce max supply limit", () => {
+    // Set very low max supply
+    simnet.callPublicFn(
+      contractName,
+      "set-max-supply",
+      [Cl.uint(2)], // Already have 2 minted
+      deployer
+    );
+
+    // Try to mint another
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(address3), Cl.none()],
+      deployer
+    );
+    expect(result).toBeErr(Cl.uint(405)); // ERR-MAX-SUPPLY-REACHED
+  });
+
+  it("should enforce per-address minting limit", () => {
+    // Set low per-address limit
+    simnet.callPublicFn(
+      contractName,
+      "set-per-address-limit",
+      [Cl.uint(1)], // address1 already has 1
+      deployer
+    );
+
+    // Try to mint another to address1
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(address1), Cl.none()],
+      deployer
+    );
+    expect(result).toBeErr(Cl.uint(403)); // ERR-MINT-LIMIT-EXCEEDED
+  });
+});
