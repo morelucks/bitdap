@@ -968,3 +968,237 @@ describe("Bitdap NFT Collection - Batch Operations", () => {
     expect(result).toBeErr(Cl.uint(401)); // ERR-UNAUTHORIZED
   });
 });
+describe("Bitdap NFT Collection - Royalty System", () => {
+  it("should allow owner to set royalty information", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "set-royalty-info",
+      [Cl.principal(address1), Cl.uint(500)], // 5% royalty
+      deployer
+    );
+    expect(result).toBeOk(Cl.bool(true));
+
+    // Verify royalty info
+    const royaltyResult = simnet.callReadOnlyFn(
+      contractName,
+      "get-royalty-info",
+      [],
+      address1
+    );
+    expect(royaltyResult.result).toBeOk(
+      Cl.tuple({
+        recipient: Cl.principal(address1),
+        percentage: Cl.uint(500),
+        "max-percentage": Cl.uint(1000),
+        "total-collected": Cl.uint(0)
+      })
+    );
+  });
+
+  it("should calculate royalty amounts correctly", () => {
+    // Set 5% royalty
+    simnet.callPublicFn(
+      contractName,
+      "set-royalty-info",
+      [Cl.principal(address1), Cl.uint(500)],
+      deployer
+    );
+
+    // Calculate royalty for 1000 STX sale
+    const { result } = simnet.callReadOnlyFn(
+      contractName,
+      "calculate-royalty",
+      [Cl.uint(1000000000)], // 1000 STX in microSTX
+      address1
+    );
+    expect(result).toBeOk(
+      Cl.tuple({
+        "sale-price": Cl.uint(1000000000),
+        "royalty-amount": Cl.uint(50000000), // 50 STX (5%)
+        "royalty-percentage": Cl.uint(500),
+        recipient: Cl.principal(address1)
+      })
+    );
+  });
+
+  it("should record royalty payments", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "record-royalty-payment",
+      [Cl.uint(50000000)], // 50 STX
+      address1
+    );
+    expect(result).toBeOk(Cl.bool(true));
+
+    // Check total collected
+    const royaltyResult = simnet.callReadOnlyFn(
+      contractName,
+      "get-royalty-info",
+      [],
+      address1
+    );
+    expect(royaltyResult.result).toBeOk(
+      Cl.tuple({
+        recipient: Cl.principal(deployer),
+        percentage: Cl.uint(0),
+        "max-percentage": Cl.uint(1000),
+        "total-collected": Cl.uint(50000000)
+      })
+    );
+  });
+
+  it("should reject royalty percentage above maximum", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "set-royalty-info",
+      [Cl.principal(address1), Cl.uint(1500)], // 15% (above 10% max)
+      deployer
+    );
+    expect(result).toBeErr(Cl.uint(408)); // ERR-INVALID-ROYALTY
+  });
+
+  it("should reject royalty setting from non-owner", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "set-royalty-info",
+      [Cl.principal(address1), Cl.uint(500)],
+      address1 // Non-owner
+    );
+    expect(result).toBeErr(Cl.uint(401)); // ERR-UNAUTHORIZED
+  });
+});
+describe("Bitdap NFT Collection - Fund Management", () => {
+  beforeEach(() => {
+    // Set mint price to test fund management
+    simnet.callPublicFn(
+      contractName,
+      "set-mint-price",
+      [Cl.uint(1000000)], // 1 STX
+      deployer
+    );
+  });
+
+  it("should collect funds from minting", () => {
+    // Mint NFT with payment
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(address1), Cl.none()],
+      address1
+    );
+    expect(result).toBeOk(Cl.uint(1));
+
+    // Check contract balance
+    const balanceResult = simnet.callReadOnlyFn(
+      contractName,
+      "get-contract-balance",
+      [],
+      address1
+    );
+    expect(balanceResult.result).toBeOk(Cl.uint(1000000));
+  });
+
+  it("should allow owner to withdraw funds", () => {
+    // Mint NFT to generate funds
+    simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(address1), Cl.none()],
+      address1
+    );
+
+    // Withdraw funds
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "withdraw-funds",
+      [Cl.uint(500000)], // 0.5 STX
+      deployer
+    );
+    expect(result).toBeOk(Cl.bool(true));
+
+    // Check remaining balance
+    const balanceResult = simnet.callReadOnlyFn(
+      contractName,
+      "get-contract-balance",
+      [],
+      address1
+    );
+    expect(balanceResult.result).toBeOk(Cl.uint(500000));
+  });
+
+  it("should allow owner to withdraw all funds", () => {
+    // Mint NFT to generate funds
+    simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(address1), Cl.none()],
+      address1
+    );
+
+    // Withdraw all funds
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "withdraw-all-funds",
+      [],
+      deployer
+    );
+    expect(result).toBeOk(Cl.bool(true));
+
+    // Check balance is zero
+    const balanceResult = simnet.callReadOnlyFn(
+      contractName,
+      "get-contract-balance",
+      [],
+      address1
+    );
+    expect(balanceResult.result).toBeOk(Cl.uint(0));
+  });
+
+  it("should reject withdrawal from non-owner", () => {
+    // Mint NFT to generate funds
+    simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(address1), Cl.none()],
+      address1
+    );
+
+    // Try to withdraw as non-owner
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "withdraw-funds",
+      [Cl.uint(500000)],
+      address1 // Non-owner
+    );
+    expect(result).toBeErr(Cl.uint(401)); // ERR-UNAUTHORIZED
+  });
+
+  it("should reject withdrawal of more than available balance", () => {
+    // Mint NFT to generate funds (1 STX)
+    simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(address1), Cl.none()],
+      address1
+    );
+
+    // Try to withdraw more than available
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "withdraw-funds",
+      [Cl.uint(2000000)], // 2 STX (more than available)
+      deployer
+    );
+    expect(result).toBeErr(Cl.uint(402)); // ERR-INSUFFICIENT-PAYMENT
+  });
+
+  it("should reject withdrawal of zero amount", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "withdraw-funds",
+      [Cl.uint(0)],
+      deployer
+    );
+    expect(result).toBeErr(Cl.uint(400)); // ERR-INVALID-AMOUNT
+  });
+});
