@@ -104,3 +104,141 @@ describe("Bitdap NFT Collection - Contract Initialization", () => {
     );
   });
 });
+describe("Bitdap NFT Collection - Minting Functionality", () => {
+  it("should allow minting NFT with metadata URI", () => {
+    const uri = Cl.some(Cl.stringUtf8("https://example.com/nft/1.json"));
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(address1), uri],
+      deployer
+    );
+    expect(result).toBeOk(Cl.uint(1));
+  });
+
+  it("should allow minting NFT without metadata URI", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(address1), Cl.none()],
+      deployer
+    );
+    expect(result).toBeOk(Cl.uint(1));
+  });
+
+  it("should increment total supply after minting", () => {
+    // Mint first NFT
+    simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(address1), Cl.none()],
+      deployer
+    );
+
+    // Check total supply
+    const { result } = simnet.callReadOnlyFn(
+      contractName,
+      "get-total-supply",
+      [],
+      address1
+    );
+    expect(result).toBeOk(Cl.uint(1));
+  });
+
+  it("should update last token ID after minting", () => {
+    // Mint first NFT
+    simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(address1), Cl.none()],
+      deployer
+    );
+
+    // Check last token ID
+    const { result } = simnet.callReadOnlyFn(
+      contractName,
+      "get-last-token-id",
+      [],
+      address1
+    );
+    expect(result).toBeOk(Cl.uint(1));
+  });
+
+  it("should set correct owner after minting", () => {
+    // Mint NFT
+    simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(address1), Cl.none()],
+      deployer
+    );
+
+    // Check owner
+    const { result } = simnet.callReadOnlyFn(
+      contractName,
+      "get-owner",
+      [Cl.uint(1)],
+      address1
+    );
+    expect(result).toBeOk(Cl.some(Cl.principal(address1)));
+  });
+
+  it("should store metadata URI correctly", () => {
+    const uri = Cl.some(Cl.stringUtf8("https://example.com/nft/1.json"));
+    
+    // Mint NFT with URI
+    simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(address1), uri],
+      deployer
+    );
+
+    // Check URI
+    const { result } = simnet.callReadOnlyFn(
+      contractName,
+      "get-token-uri",
+      [Cl.uint(1)],
+      address1
+    );
+    expect(result).toBeOk(uri);
+  });
+
+  it("should reject minting when contract is paused", () => {
+    // Pause contract
+    simnet.callPublicFn(
+      contractName,
+      "pause-contract",
+      [],
+      deployer
+    );
+
+    // Try to mint
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(address1), Cl.none()],
+      deployer
+    );
+    expect(result).toBeErr(Cl.uint(406)); // ERR-CONTRACT-PAUSED
+  });
+
+  it("should reject minting when minting is disabled", () => {
+    // Disable minting
+    simnet.callPublicFn(
+      contractName,
+      "set-minting-enabled",
+      [Cl.bool(false)],
+      deployer
+    );
+
+    // Try to mint
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(address1), Cl.none()],
+      deployer
+    );
+    expect(result).toBeErr(Cl.uint(406)); // ERR-CONTRACT-PAUSED
+  });
+});
