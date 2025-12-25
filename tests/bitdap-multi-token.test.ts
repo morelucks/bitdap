@@ -1024,3 +1024,193 @@ describe("Bitdap Multi Token - Burning", () => {
     expect(result).toBeErr(Cl.uint(408)); // ERR-TOKEN-NOT-EXISTS
   });
 });
+describe("Bitdap Multi Token - Batch Burning", () => {
+  beforeEach(() => {
+    // Create multiple test tokens
+    simnet.callPublicFn(
+      contractName,
+      "create-token",
+      [Cl.stringUtf8("Batch Burn A"), Cl.stringUtf8("BBA"), Cl.uint(18), Cl.bool(true), Cl.none()],
+      deployer
+    );
+    simnet.callPublicFn(
+      contractName,
+      "create-token",
+      [Cl.stringUtf8("Batch Burn B"), Cl.stringUtf8("BBB"), Cl.uint(6), Cl.bool(true), Cl.none()],
+      deployer
+    );
+    
+    // Mint tokens to address1
+    simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(address1), Cl.uint(1), Cl.uint(1000)],
+      deployer
+    );
+    simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(address1), Cl.uint(2), Cl.uint(2000)],
+      deployer
+    );
+  });
+
+  it("should allow batch burning multiple tokens", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "batch-burn",
+      [
+        Cl.principal(address1),
+        Cl.list([Cl.uint(1), Cl.uint(2)]),
+        Cl.list([Cl.uint(300), Cl.uint(500)])
+      ],
+      address1
+    );
+    expect(result).toBeOk(Cl.principal(address1));
+  });
+
+  it("should update balances correctly after batch burn", () => {
+    // Batch burn
+    simnet.callPublicFn(
+      contractName,
+      "batch-burn",
+      [
+        Cl.principal(address1),
+        Cl.list([Cl.uint(1), Cl.uint(2)]),
+        Cl.list([Cl.uint(400), Cl.uint(800)])
+      ],
+      address1
+    );
+
+    // Check remaining balances
+    const balance1 = simnet.callReadOnlyFn(
+      contractName,
+      "get-balance",
+      [Cl.principal(address1), Cl.uint(1)],
+      address1
+    );
+    expect(balance1.result).toBeOk(Cl.uint(600));
+
+    const balance2 = simnet.callReadOnlyFn(
+      contractName,
+      "get-balance",
+      [Cl.principal(address1), Cl.uint(2)],
+      address1
+    );
+    expect(balance2.result).toBeOk(Cl.uint(1200));
+  });
+
+  it("should update total supplies correctly after batch burn", () => {
+    // Batch burn
+    simnet.callPublicFn(
+      contractName,
+      "batch-burn",
+      [
+        Cl.principal(address1),
+        Cl.list([Cl.uint(1), Cl.uint(2)]),
+        Cl.list([Cl.uint(200), Cl.uint(300)])
+      ],
+      address1
+    );
+
+    // Check total supplies
+    const supply1 = simnet.callReadOnlyFn(
+      contractName,
+      "get-total-supply",
+      [Cl.uint(1)],
+      address1
+    );
+    expect(supply1.result).toBeOk(Cl.uint(800));
+
+    const supply2 = simnet.callReadOnlyFn(
+      contractName,
+      "get-total-supply",
+      [Cl.uint(2)],
+      address1
+    );
+    expect(supply2.result).toBeOk(Cl.uint(1700));
+  });
+
+  it("should reject batch burn with mismatched array lengths", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "batch-burn",
+      [
+        Cl.principal(address1),
+        Cl.list([Cl.uint(1), Cl.uint(2)]),
+        Cl.list([Cl.uint(300)]) // Mismatched length
+      ],
+      address1
+    );
+    expect(result).toBeErr(Cl.uint(404)); // ERR-INVALID-AMOUNT
+  });
+
+  it("should reject batch burn from unauthorized account", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "batch-burn",
+      [
+        Cl.principal(address1),
+        Cl.list([Cl.uint(1), Cl.uint(2)]),
+        Cl.list([Cl.uint(300), Cl.uint(500)])
+      ],
+      address2 // address2 trying to burn address1's tokens
+    );
+    expect(result).toBeErr(Cl.uint(401)); // ERR-UNAUTHORIZED
+  });
+
+  it("should allow approved operator to batch burn", () => {
+    // Set approval for all
+    simnet.callPublicFn(
+      contractName,
+      "set-approval-for-all",
+      [Cl.principal(address2), Cl.bool(true)],
+      address1
+    );
+
+    // Batch burn as approved operator
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "batch-burn",
+      [
+        Cl.principal(address1),
+        Cl.list([Cl.uint(1), Cl.uint(2)]),
+        Cl.list([Cl.uint(100), Cl.uint(200)])
+      ],
+      address2
+    );
+    expect(result).toBeOk(Cl.principal(address1));
+  });
+
+  it("should handle zero amounts in batch burn", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "batch-burn",
+      [
+        Cl.principal(address1),
+        Cl.list([Cl.uint(1), Cl.uint(2)]),
+        Cl.list([Cl.uint(0), Cl.uint(400)]) // Zero amount for first token
+      ],
+      address1
+    );
+    expect(result).toBeOk(Cl.principal(address1));
+
+    // Check that first token balance is unchanged
+    const balance1 = simnet.callReadOnlyFn(
+      contractName,
+      "get-balance",
+      [Cl.principal(address1), Cl.uint(1)],
+      address1
+    );
+    expect(balance1.result).toBeOk(Cl.uint(1000));
+
+    // Check that second token balance is reduced
+    const balance2 = simnet.callReadOnlyFn(
+      contractName,
+      "get-balance",
+      [Cl.principal(address1), Cl.uint(2)],
+      address1
+    );
+    expect(balance2.result).toBeOk(Cl.uint(1600));
+  });
+});
