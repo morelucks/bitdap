@@ -1304,3 +1304,91 @@ describe("Bitdap Pass - Marketplace Functionality", () => {
     expect(result).toBeErr(Cl.uint(201)); // ERR-NOT-OWNER
   });
 });
+describe("Bitdap Pass - Batch Operations", () => {
+  it("should batch mint multiple passes", () => {
+    const recipients = [
+      { recipient: Cl.principal(address1), tier: Cl.uint(1), uri: Cl.none() },
+      { recipient: Cl.principal(address2), tier: Cl.uint(2), uri: Cl.none() },
+      { recipient: Cl.principal(address1), tier: Cl.uint(3), uri: Cl.none() }
+    ];
+
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "batch-mint",
+      [Cl.list(recipients.map(r => Cl.tuple(r)))],
+      deployer // Only admin can batch mint
+    );
+    expect(result).toBeOk(Cl.list([Cl.uint(1), Cl.uint(2), Cl.uint(3)]));
+  });
+
+  it("should batch transfer multiple tokens", () => {
+    // First mint some tokens
+    const recipients = [
+      { recipient: Cl.principal(address1), tier: Cl.uint(1), uri: Cl.none() },
+      { recipient: Cl.principal(address1), tier: Cl.uint(2), uri: Cl.none() }
+    ];
+    simnet.callPublicFn(
+      contractName,
+      "batch-mint",
+      [Cl.list(recipients.map(r => Cl.tuple(r)))],
+      deployer
+    );
+
+    // Then batch transfer
+    const transfers = [
+      { "token-id": Cl.uint(1), recipient: Cl.principal(address2) },
+      { "token-id": Cl.uint(2), recipient: Cl.principal(address2) }
+    ];
+
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "batch-transfer",
+      [Cl.list(transfers.map(t => Cl.tuple(t)))],
+      address1
+    );
+    expect(result).toBeOk(Cl.list([Cl.uint(1), Cl.uint(2)]));
+  });
+
+  it("should reject batch mint from non-admin", () => {
+    const recipients = [
+      { recipient: Cl.principal(address1), tier: Cl.uint(1), uri: Cl.none() }
+    ];
+
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "batch-mint",
+      [Cl.list(recipients.map(r => Cl.tuple(r)))],
+      address1 // Non-admin
+    );
+    expect(result).toBeErr(Cl.uint(200)); // ERR-UNAUTHORIZED
+  });
+
+  it("should reject batch transfer when paused", () => {
+    // Mint tokens first
+    const recipients = [
+      { recipient: Cl.principal(address1), tier: Cl.uint(1), uri: Cl.none() }
+    ];
+    simnet.callPublicFn(
+      contractName,
+      "batch-mint",
+      [Cl.list(recipients.map(r => Cl.tuple(r)))],
+      deployer
+    );
+
+    // Pause contract
+    simnet.callPublicFn(contractName, "pause", [], deployer);
+
+    // Try batch transfer
+    const transfers = [
+      { "token-id": Cl.uint(1), recipient: Cl.principal(address2) }
+    ];
+
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "batch-transfer",
+      [Cl.list(transfers.map(t => Cl.tuple(t)))],
+      address1
+    );
+    expect(result).toBeErr(Cl.uint(500)); // ERR-PAUSED
+  });
+});
