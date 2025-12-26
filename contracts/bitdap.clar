@@ -180,9 +180,6 @@
 ;; Contract owner (admin) - initialized to contract deployer
 (define-data-var contract-owner principal tx-sender)
 
-;; Pause flag (when true, mint/transfer are disabled)
-(define-data-var paused bool false)
-
 ;; Marketplace pause flag (when true, marketplace operations are disabled)
 (define-data-var marketplace-paused bool false)
 
@@ -231,7 +228,7 @@
 )
 
 (define-private (validate-not-paused)
-    (if (var-get paused)
+    (if (or (var-get mint-paused) (var-get transfer-paused))
         ERR-PAUSED
         (ok true)
     )
@@ -596,7 +593,11 @@
 )
 
 (define-read-only (is-paused)
-    (ok (var-get paused))
+    (ok (tuple 
+        (mint-paused (var-get mint-paused))
+        (transfer-paused (var-get transfer-paused))
+        (marketplace-paused (var-get marketplace-paused))
+    ))
 )
 
 (define-public (mint-pass
@@ -609,6 +610,12 @@
         (try! (validate-not-paused))
         (asserts! (not (var-get mint-paused)) ERR-FEATURE-DISABLED)
         (try! (validate-tier tier))
+        
+        ;; Validate URI length if provided
+        (match uri
+            uri-value (asserts! (<= (len uri-value) u256) ERR-INVALID-URI)
+            true
+        )
         
         ;; Check feature flag for minting
         (let ((minting-enabled (unwrap! (is-feature-enabled "minting" tx-sender) ERR-FEATURE-DISABLED)))
@@ -920,7 +927,9 @@
     (begin
         (asserts! (not (var-get marketplace-paused)) ERR-PAUSED)
         (asserts! (> price u0) ERR-INVALID-PRICE)
-        (asserts! (> expiry-blocks u0) ERR-INVALID-PRICE)
+        (asserts! (> expiry-blocks u0) ERR-INVALID-EXPIRY)
+        (asserts! (<= price (var-get max-listing-price)) ERR-LISTING-PRICE-TOO-HIGH)
+        (asserts! (>= price (var-get min-listing-price)) ERR-LISTING-PRICE-TOO-LOW)
         (match (map-get? token-owners { token-id: token-id })
             owner-data (let ((owner (get owner owner-data)))
                 (if (not (is-eq owner tx-sender))
@@ -1100,7 +1109,8 @@
 (define-public (pause)
     (begin
         (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-UNAUTHORIZED)
-        (var-set paused true)
+        (var-set mint-paused true)
+        (var-set transfer-paused true)
         (ok true)
     )
 )
@@ -1109,7 +1119,8 @@
 (define-public (unpause)
     (begin
         (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-UNAUTHORIZED)
-        (var-set paused false)
+        (var-set mint-paused false)
+        (var-set transfer-paused false)
         (ok true)
     )
 )
@@ -1300,7 +1311,7 @@
 (define-public (batch-mint (recipients (list 10 { recipient: principal, tier: uint, uri: (optional (string-utf8 256)) })))
     (begin
         (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-UNAUTHORIZED)
-        (asserts! (not (var-get paused)) ERR-PAUSED)
+        (asserts! (not (or (var-get mint-paused) (var-get transfer-paused))) ERR-PAUSED)
         (fold batch-mint-helper recipients (ok (list)))
     )
 )
@@ -1370,7 +1381,7 @@
 ;; Batch transfer multiple tokens (owner must be tx-sender for all)
 (define-public (batch-transfer (transfers (list 10 { token-id: uint, recipient: principal })))
     (begin
-        (asserts! (not (var-get paused)) ERR-PAUSED)
+        (asserts! (not (var-get transfer-paused)) ERR-PAUSED)
         (fold batch-transfer-helper transfers (ok true))
     )
 )
@@ -1416,7 +1427,8 @@
 (define-public (set-marketplace-fee (fee-percent uint))
     (begin
         (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-UNAUTHORIZED)
-        (asserts! (<= fee-percent u10) ERR-INVALID-PRICE)
+        (asserts! (<= fee-percent u10) ERR-INVALID-AMOUNT) ;; Max 10% fee
+        (asserts! (>= fee-percent u0) ERR-INVALID-AMOUNT) ;; Min 0% fee
         (var-set marketplace-fee-percent fee-percent)
         (print (tuple
             (event "marketplace-fee-updated")
@@ -2328,7 +2340,7 @@
             })
             
             ;; Apply the configuration change
-            (try! (apply-config-change config-key new-value))
+            (unwrap! (apply-config-change config-key new-value) ERR-INTERNAL-ERROR)
             
             (var-set next-config-version (+ version u1))
             
@@ -2378,18 +2390,15 @@
 
 ;; Apply configuration changes
 (define-private (apply-config-change (config-key (string-ascii 32)) (value uint))
-    (if (is-eq config-key "marketplace-fee")
-        (begin
+    (begin
+        (if (is-eq config-key "marketplace-fee")
             (var-set marketplace-fee-percent value)
-            (ok true)
-        )
-        (if (is-eq config-key "rate-limit-window")
-            (begin
+            (if (is-eq config-key "rate-limit-window")
                 (var-set rate-limit-window value)
-                (ok true)
+                true ;; Unknown config keys are ignored
             )
-            (ok true) ;; Unknown config keys are ignored
         )
+        (ok true)
     )
 )
 
@@ -2516,7 +2525,7 @@
             )
                 (begin
                     ;; Apply rollback
-                    (try! (apply-config-change config-key rollback-value))
+                    (unwrap! (apply-config-change config-key rollback-value) ERR-INTERNAL-ERROR)
                     
                     ;; Record rollback in history
                     (let ((version (var-get next-config-version)))
@@ -2595,7 +2604,6 @@
 (define-read-only (get-contract-status)
     (ok (tuple
         (version u3) ;; Contract version
-        (paused (var-get paused))
         (mint-paused (var-get mint-paused))
         (transfer-paused (var-get transfer-paused))
         (marketplace-paused (var-get marketplace-operations-paused))
