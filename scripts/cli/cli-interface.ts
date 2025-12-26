@@ -38,11 +38,13 @@ export class CLIInterface {
     const { TransferCommand } = await import('../commands/transfer-command.js');
     const { QueryCommand } = await import('../commands/query-command.js');
     const { ConfigCommand } = await import('../commands/config-command.js');
+    const { BatchCommand } = await import('../commands/batch-command.js');
 
     this.router.registerCommand(new MintCommand().getDefinition());
     this.router.registerCommand(new TransferCommand().getDefinition());
     this.router.registerCommand(new QueryCommand().getDefinition());
     this.router.registerCommand(new ConfigCommand().getDefinition());
+    this.router.registerCommand(new BatchCommand().getDefinition());
   }
 
   /**
@@ -118,6 +120,34 @@ export class CLIInterface {
           });
       }, async (argv) => {
         await this.executeCommand('query', argv);
+      })
+      .command('batch', 'Execute multiple operations from a batch file', (yargs) => {
+        return yargs
+          .option('file', {
+            type: 'string',
+            describe: 'Path to batch file (JSON or CSV format)',
+            demandOption: true
+          })
+          .option('private-key', {
+            type: 'string',
+            describe: 'Private key for signing transactions',
+            demandOption: true
+          })
+          .option('output', {
+            type: 'string',
+            describe: 'Output file path for results'
+          })
+          .option('delay', {
+            type: 'number',
+            describe: 'Delay between operations in milliseconds',
+            default: 1000
+          })
+          .option('create-sample', {
+            type: 'boolean',
+            describe: 'Create sample batch files'
+          });
+      }, async (argv) => {
+        await this.executeCommand('batch', argv);
       })
       .command('config', 'Manage configuration settings', (yargs) => {
         return yargs
