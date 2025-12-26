@@ -1166,3 +1166,44 @@ describe("Bitdap Pass - Counters", () => {
     );
   });
 });
+describe("Bitdap Pass - Error Handling", () => {
+  it("should handle invalid token ID queries gracefully", () => {
+    const { result } = simnet.callReadOnlyFn(
+      contractName,
+      "get-owner",
+      [Cl.uint(0)], // Invalid token ID
+      address1
+    );
+    expect(result).toBeErr(Cl.uint(300)); // ERR-NOT-FOUND
+  });
+
+  it("should handle negative token ID queries", () => {
+    const { result } = simnet.callReadOnlyFn(
+      contractName,
+      "get-tier",
+      [Cl.uint(999999)], // Very large token ID
+      address1
+    );
+    expect(result).toBeErr(Cl.uint(300)); // ERR-NOT-FOUND
+  });
+
+  it("should validate tier bounds correctly", () => {
+    // Test tier 0 (invalid)
+    const result0 = simnet.callPublicFn(
+      contractName,
+      "mint-pass",
+      [Cl.uint(0), Cl.none()],
+      address1
+    );
+    expect(result0.result).toBeErr(Cl.uint(100)); // ERR-INVALID-TIER
+
+    // Test tier 4 (invalid, only 1-3 are valid)
+    const result4 = simnet.callPublicFn(
+      contractName,
+      "mint-pass",
+      [Cl.uint(4), Cl.none()],
+      address1
+    );
+    expect(result4.result).toBeErr(Cl.uint(100)); // ERR-INVALID-TIER
+  });
+});
