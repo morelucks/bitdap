@@ -1052,6 +1052,10 @@
         )
     )
 )
+            ERR-LISTING-NOT-FOUND
+        )
+    )
+)
 
 ;; private functions
 ;; - Internal helpers for validating tiers and managing counters/maps.
