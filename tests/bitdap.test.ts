@@ -245,7 +245,7 @@ describe("Bitdap Pass - Burn Functionality", () => {
       [Cl.uint(1)],
       address1
     );
-    expect(ownerResult.result).toBeErr(Cl.uint(101)); // ERR-NOT-FOUND
+    expect(ownerResult.result).toBeErr(Cl.uint(300)); // ERR-NOT-FOUND
   });
 
   it("should decrement total supply after burn", () => {
@@ -289,7 +289,7 @@ describe("Bitdap Pass - Burn Functionality", () => {
       [Cl.uint(1)],
       address2
     );
-    expect(result).toBeErr(Cl.uint(102)); // ERR-NOT-OWNER
+    expect(result).toBeErr(Cl.uint(201)); // ERR-NOT-OWNER
   });
 });
 
