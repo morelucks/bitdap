@@ -10,7 +10,16 @@
     "test:watch": "chokidar \"tests/**/*.ts\" \"contracts/**/*.clar\" -c \"npm run test:report\"",
     "chainhooks:setup": "tsx chainhooks.ts",
     "chainhooks:register": "tsx chainhooks.ts",
-    "txs:bitdap:100": "tsx scripts/send-100-txs.ts"
+    "txs:bitdap:100": "tsx scripts/send-100-txs.ts",
+    "token-interact": "tsx scripts/token-interaction.ts",
+    "build": "tsc",
+    "dev": "tsx --watch scripts/token-interaction.ts",
+    "token:help": "npm run token-interact -- --help",
+    "token:mint": "npm run token-interact mint",
+    "token:transfer": "npm run token-interact transfer", 
+    "token:query": "npm run token-interact query",
+    "token:config": "npm run token-interact config",
+    "token:batch": "npm run token-interact batch"
   },
   "author": "",
   "license": "ISC",
@@ -25,9 +34,19 @@
     "cross-fetch": "^4.1.0",
     "ts-node": "^10.9.2",
     "vitest": "^4.0.7",
-    "vitest-environment-clarinet": "^3.0.0"
+    "vitest-environment-clarinet": "^3.0.0",
+    "yargs": "^17.7.2",
+    "chalk": "^5.3.0",
+    "inquirer": "^9.2.12",
+    "cli-table3": "^0.6.3",
+    "csv-writer": "^1.6.0",
+    "winston": "^3.11.0",
+    "winston-daily-rotate-file": "^4.7.1"
   },
   "devDependencies": {
-    "tsx": "^4.21.0"
+    "tsx": "^4.21.0",
+    "@types/yargs": "^17.0.32",
+    "@types/inquirer": "^9.0.7",
+    "typescript": "^5.3.3"
   }
 }
