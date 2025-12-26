@@ -611,6 +611,12 @@
         (asserts! (not (var-get mint-paused)) ERR-FEATURE-DISABLED)
         (try! (validate-tier tier))
         
+        ;; Validate URI length if provided
+        (match uri
+            uri-value (asserts! (<= (len uri-value) u256) ERR-INVALID-URI)
+            true
+        )
+        
         ;; Check feature flag for minting
         (let ((minting-enabled (unwrap! (is-feature-enabled "minting" tx-sender) ERR-FEATURE-DISABLED)))
             (asserts! minting-enabled ERR-FEATURE-DISABLED)
