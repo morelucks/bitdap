@@ -1493,3 +1493,126 @@ describe("Bitdap Pass - Security and Access Control", () => {
     expect(mintAfterUnpause.result).toBeOk(Cl.uint(1));
   });
 });
+describe("Bitdap Pass - Edge Cases and Boundaries", () => {
+  it("should handle maximum tier values", () => {
+    // Test valid tiers (1, 2, 3)
+    const validTiers = [1, 2, 3];
+    validTiers.forEach(tier => {
+      const { result } = simnet.callPublicFn(
+        contractName,
+        "mint-pass",
+        [Cl.uint(tier), Cl.none()],
+        address1
+      );
+      expect(result).toBeOk(Cl.uint(expect.any(Number)));
+    });
+  });
+
+  it("should handle empty URI metadata", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "mint-pass",
+      [Cl.uint(1), Cl.none()],
+      address1
+    );
+    expect(result).toBeOk(Cl.uint(1));
+
+    // Verify URI is none
+    const uriResult = simnet.callReadOnlyFn(
+      contractName,
+      "get-token-uri",
+      [Cl.uint(1)],
+      address1
+    );
+    expect(uriResult.result).toBeOk(Cl.none());
+  });
+
+  it("should handle very long URI strings", () => {
+    const longUri = "https://example.com/" + "a".repeat(200) + ".json";
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "mint-pass",
+      [Cl.uint(1), Cl.some(Cl.stringUtf8(longUri))],
+      address1
+    );
+    expect(result).toBeOk(Cl.uint(1));
+  });
+
+  it("should handle rapid sequential operations", () => {
+    // Mint multiple tokens rapidly
+    for (let i = 1; i <= 5; i++) {
+      const { result } = simnet.callPublicFn(
+        contractName,
+        "mint-pass",
+        [Cl.uint(1), Cl.none()],
+        address1
+      );
+      expect(result).toBeOk(Cl.uint(i));
+    }
+
+    // Verify total supply
+    const supplyResult = simnet.callReadOnlyFn(
+      contractName,
+      "get-total-supply",
+      [],
+      address1
+    );
+    expect(supplyResult.result).toBeOk(Cl.uint(5));
+  });
+
+  it("should handle token operations on non-sequential IDs", () => {
+    // Mint tokens
+    simnet.callPublicFn(
+      contractName,
+      "mint-pass",
+      [Cl.uint(1), Cl.none()],
+      address1
+    );
+    simnet.callPublicFn(
+      contractName,
+      "mint-pass",
+      [Cl.uint(2), Cl.none()],
+      address1
+    );
+    simnet.callPublicFn(
+      contractName,
+      "mint-pass",
+      [Cl.uint(3), Cl.none()],
+      address1
+    );
+
+    // Burn middle token
+    simnet.callPublicFn(
+      contractName,
+      "burn",
+      [Cl.uint(2)],
+      address1
+    );
+
+    // Verify remaining tokens still work
+    const owner1 = simnet.callReadOnlyFn(
+      contractName,
+      "get-owner",
+      [Cl.uint(1)],
+      address1
+    );
+    expect(owner1.result).toBeOk(Cl.principal(address1));
+
+    const owner3 = simnet.callReadOnlyFn(
+      contractName,
+      "get-owner",
+      [Cl.uint(3)],
+      address1
+    );
+    expect(owner3.result).toBeOk(Cl.principal(address1));
+
+    // Verify burned token is gone
+    const owner2 = simnet.callReadOnlyFn(
+      contractName,
+      "get-owner",
+      [Cl.uint(2)],
+      address1
+    );
+    expect(owner2.result).toBeErr(Cl.uint(300)); // ERR-NOT-FOUND
+  });
+});
