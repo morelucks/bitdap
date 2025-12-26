@@ -2378,18 +2378,15 @@
 
 ;; Apply configuration changes
 (define-private (apply-config-change (config-key (string-ascii 32)) (value uint))
-    (if (is-eq config-key "marketplace-fee")
-        (begin
+    (begin
+        (if (is-eq config-key "marketplace-fee")
             (var-set marketplace-fee-percent value)
-            (ok true)
-        )
-        (if (is-eq config-key "rate-limit-window")
-            (begin
+            (if (is-eq config-key "rate-limit-window")
                 (var-set rate-limit-window value)
-                (ok true)
+                true ;; Unknown config keys are ignored
             )
-            (ok true) ;; Unknown config keys are ignored
         )
+        (ok true)
     )
 )
 
