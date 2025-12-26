@@ -853,7 +853,7 @@ describe("Bitdap Pass - Events & Emissions", () => {
       address1
     );
     
-    expect(result).toBeErr(Cl.uint(101)); // ERR-NOT-FOUND
+    expect(result).toBeErr(Cl.uint(300)); // ERR-NOT-FOUND
     // No transfer-event should be emitted on failure
     const transferEvent = events.find((e: any) => 
       e.event === "transfer-event" || 
