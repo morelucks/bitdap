@@ -40,11 +40,20 @@ export class CLIInterface {
     const { ConfigCommand } = await import('../commands/config-command.js');
     const { BatchCommand } = await import('../commands/batch-command.js');
 
+    // Import NFT collection integration
+    const { NFTCLIIntegration } = await import('../nft-collection/nft-cli-integration.js');
+
     this.router.registerCommand(new MintCommand().getDefinition());
     this.router.registerCommand(new TransferCommand().getDefinition());
     this.router.registerCommand(new QueryCommand().getDefinition());
     this.router.registerCommand(new ConfigCommand().getDefinition());
     this.router.registerCommand(new BatchCommand().getDefinition());
+
+    // Initialize NFT collection commands
+    const nftIntegration = new NFTCLIIntegration(this.router);
+    
+    // Store NFT integration for later use
+    (this as any).nftIntegration = nftIntegration;
   }
 
   /**
@@ -121,6 +130,202 @@ export class CLIInterface {
       }, async (argv) => {
         await this.executeCommand('query', argv);
       })
+      .command('nft-mint', 'Mint new NFTs in the collection', (yargs) => {
+        return yargs
+          .option('recipient', {
+            type: 'string',
+            describe: 'Recipient address for the NFT',
+            demandOption: true
+          })
+          .option('uri', {
+            type: 'string',
+            describe: 'Metadata URI for the NFT'
+          })
+          .option('private-key', {
+            type: 'string',
+            describe: 'Private key for signing the transaction',
+            demandOption: true
+          })
+          .option('quantity', {
+            type: 'number',
+            describe: 'Number of NFTs to mint (default: 1)',
+            default: 1
+          });
+      }, async (argv) => {
+        await this.executeCommand('nft-mint', argv);
+      })
+      .command('nft-transfer', 'Transfer NFTs to another address', (yargs) => {
+        return yargs
+          .option('token-id', {
+            type: 'number',
+            describe: 'ID of the NFT to transfer',
+            demandOption: true
+          })
+          .option('from', {
+            type: 'string',
+            describe: 'Current owner address',
+            demandOption: true
+          })
+          .option('to', {
+            type: 'string',
+            describe: 'Recipient address',
+            demandOption: true
+          })
+          .option('private-key', {
+            type: 'string',
+            describe: 'Private key for signing the transaction',
+            demandOption: true
+          })
+          .option('memo', {
+            type: 'string',
+            describe: 'Optional memo for the transfer'
+          });
+      }, async (argv) => {
+        await this.executeCommand('nft-transfer', argv);
+      })
+      .command('nft-approve', 'Approve operators for NFT transfers', (yargs) => {
+        return yargs
+          .option('action', {
+            type: 'string',
+            describe: 'Approval action: approve, approve-all, revoke, revoke-all',
+            demandOption: true,
+            choices: ['approve', 'approve-all', 'revoke', 'revoke-all']
+          })
+          .option('token-id', {
+            type: 'number',
+            describe: 'ID of the NFT to approve (required for approve/revoke)'
+          })
+          .option('operator', {
+            type: 'string',
+            describe: 'Address to approve as operator',
+            demandOption: true
+          })
+          .option('private-key', {
+            type: 'string',
+            describe: 'Private key for signing the transaction',
+            demandOption: true
+          });
+      }, async (argv) => {
+        await this.executeCommand('nft-approve', argv);
+      })
+      .command('nft-query', 'Query NFT collection information', (yargs) => {
+        return yargs
+          .option('type', {
+            type: 'string',
+            describe: 'Type of query to perform',
+            demandOption: true,
+            choices: ['collection', 'token', 'owner', 'mint-info', 'status', 'royalty', 'approved', 'exists', 'supply', 'metadata']
+          })
+          .option('token-id', {
+            type: 'number',
+            describe: 'Token ID (required for token-specific queries)'
+          })
+          .option('owner', {
+            type: 'string',
+            describe: 'Owner address (for ownership queries)'
+          })
+          .option('limit', {
+            type: 'number',
+            describe: 'Maximum number of results to return',
+            default: 10
+          })
+          .option('offset', {
+            type: 'number',
+            describe: 'Number of results to skip',
+            default: 0
+          });
+      }, async (argv) => {
+        await this.executeCommand('nft-query', argv);
+      })
+      .command('nft-admin', 'Administrative operations for NFT collection', (yargs) => {
+        return yargs
+          .option('action', {
+            type: 'string',
+            describe: 'Administrative action to perform',
+            demandOption: true,
+            choices: ['pause', 'unpause', 'set-mint-price', 'set-per-address-limit', 'set-max-supply', 'enable-minting', 'disable-minting', 'set-royalty', 'set-metadata', 'transfer-ownership', 'withdraw', 'withdraw-all', 'emergency-pause']
+          })
+          .option('private-key', {
+            type: 'string',
+            describe: 'Private key for signing the transaction (must be contract owner)',
+            demandOption: true
+          })
+          .option('value', {
+            type: 'string',
+            describe: 'Value for the action (varies by action type)'
+          })
+          .option('recipient', {
+            type: 'string',
+            describe: 'Recipient address (for ownership transfer, royalty setup)'
+          })
+          .option('amount', {
+            type: 'number',
+            describe: 'Amount (for price setting, royalty percentage, withdrawal)'
+          })
+          .option('name', {
+            type: 'string',
+            describe: 'Collection name (for metadata updates)'
+          })
+          .option('symbol', {
+            type: 'string',
+            describe: 'Collection symbol (for metadata updates)'
+          })
+          .option('description', {
+            type: 'string',
+            describe: 'Collection description (for metadata updates)'
+          })
+          .option('uri', {
+            type: 'string',
+            describe: 'Collection URI (for metadata updates)'
+          });
+      }, async (argv) => {
+        await this.executeCommand('nft-admin', argv);
+      })
+      .command('nft-batch', 'Execute batch operations for NFT collection', (yargs) => {
+        return yargs
+          .option('operation', {
+            type: 'string',
+            describe: 'Batch operation type: mint, transfer, burn',
+            demandOption: true,
+            choices: ['mint', 'transfer', 'burn']
+          })
+          .option('file', {
+            type: 'string',
+            describe: 'Path to batch file (JSON or CSV format)'
+          })
+          .option('private-key', {
+            type: 'string',
+            describe: 'Private key for signing transactions',
+            demandOption: true
+          })
+          .option('output', {
+            type: 'string',
+            describe: 'Output file path for results'
+          })
+          .option('delay', {
+            type: 'number',
+            describe: 'Delay between operations in milliseconds',
+            default: 1500
+          })
+          .option('create-sample', {
+            type: 'boolean',
+            describe: 'Create sample batch files'
+          })
+          .option('recipients', {
+            type: 'string',
+            describe: 'Comma-separated list of recipient addresses (for simple batch mint)'
+          })
+          .option('token-ids', {
+            type: 'string',
+            describe: 'Comma-separated list of token IDs (for batch operations)'
+          })
+          .option('base-uri', {
+            type: 'string',
+            describe: 'Base URI for batch minting (will append token numbers)'
+          });
+      }, async (argv) => {
+        await this.executeCommand('nft-batch', argv);
+      })
       .command('batch', 'Execute multiple operations from a batch file', (yargs) => {
         return yargs
           .option('file', {
@@ -193,10 +398,18 @@ export class CLIInterface {
     try {
       console.log(chalk.blue('🚀 Executing command:'), commandName);
       
-      const result = await this.router.executeCommand(commandName, args);
-      
-      if (result) {
-        this.displayResult(result);
+      // Check if it's an NFT command and use enhanced handling
+      const nftIntegration = (this as any).nftIntegration;
+      if (nftIntegration && nftIntegration.isNFTCommand(commandName)) {
+        const result = await nftIntegration.executeNFTCommand(commandName, args);
+        if (result) {
+          this.displayResult(result);
+        }
+      } else {
+        const result = await this.router.executeCommand(commandName, args);
+        if (result) {
+          this.displayResult(result);
+        }
       }
       
     } catch (error: any) {
@@ -205,8 +418,16 @@ export class CLIInterface {
       // Show suggestions for unknown commands
       if (error.message.includes('Unknown command')) {
         const suggestions = this.router.getCommandSuggestions(commandName);
+        const nftIntegration = (this as any).nftIntegration;
+        
+        // Add NFT command suggestions if available
+        if (nftIntegration) {
+          const nftSuggestions = nftIntegration.getNFTCommandSuggestions(commandName);
+          suggestions.push(...nftSuggestions);
+        }
+        
         if (suggestions.length > 0) {
-          console.log(chalk.yellow('💡 Did you mean:'), suggestions.join(', '));
+          console.log(chalk.yellow('💡 Did you mean:'), suggestions.slice(0, 5).join(', '));
         }
       }
       
