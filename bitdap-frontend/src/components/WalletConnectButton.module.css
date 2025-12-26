@@ -1,94 +1,36 @@
-.container {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
 .button {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  padding: 10px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.3s ease;
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  border: none;
-  border-radius: 0.5rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  font-family: inherit;
+  gap: 8px;
 }
-
-.button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.button:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-}
-
-.button:active:not(:disabled) {
-  transform: translateY(0);
-}
-
-/* Variants */
-.primary {
-  background-color: #3b82f6;
+.button:hover {
+  background: var(--accent);
+  border-color: var(--accent);
   color: white;
 }
-
-.primary:hover:not(:disabled) {
-  background-color: #2563eb;
+.button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
-
-.secondary {
-  background-color: #e5e7eb;
-  color: #1f2937;
+.address {
+  color: var(--text-secondary);
+  font-size: 12px;
 }
-
-.secondary:hover:not(:disabled) {
-  background-color: #d1d5db;
-}
-
-/* Sizes */
-.sm {
-  padding: 0.5rem 1rem;
-  font-size: 0.875rem;
-}
-
-.md {
-  padding: 0.75rem 1.5rem;
-  font-size: 1rem;
-}
-
-.lg {
-  padding: 1rem 2rem;
-  font-size: 1.125rem;
-}
-
-/* Spinner */
-.spinner {
+.network {
   display: inline-block;
-  width: 1em;
-  height: 1em;
-  border: 2px solid currentColor;
-  border-right-color: transparent;
-  border-radius: 50%;
-  animation: spin 0.6s linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-/* Error message */
-.error {
-  color: #dc2626;
-  font-size: 0.875rem;
-  padding: 0.5rem;
-  background-color: #fee2e2;
-  border-radius: 0.375rem;
-  border-left: 3px solid #dc2626;
+  padding: 2px 8px;
+  background: var(--accent);
+  color: white;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
 }
