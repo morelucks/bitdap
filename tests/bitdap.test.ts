@@ -660,7 +660,7 @@ describe("Bitdap Pass - Marketplace Pause Controls", () => {
       [],
       address1
     );
-    expect(result).toBeErr(Cl.uint(106)); // ERR-UNAUTHORIZED
+    expect(result).toBeErr(Cl.uint(200)); // ERR-UNAUTHORIZED
   });
 
   it("should reject marketplace unpause from non-admin", () => {
@@ -677,7 +677,7 @@ describe("Bitdap Pass - Marketplace Pause Controls", () => {
       [],
       address1
     );
-    expect(result).toBeErr(Cl.uint(106)); // ERR-UNAUTHORIZED
+    expect(result).toBeErr(Cl.uint(200)); // ERR-UNAUTHORIZED
   });
 
   it("should block mint when marketplace is paused", () => {
@@ -696,7 +696,7 @@ describe("Bitdap Pass - Marketplace Pause Controls", () => {
       [Cl.uint(1), Cl.none()],
       address1
     );
-    expect(result).toBeErr(Cl.uint(107)); // ERR-PAUSED
+    expect(result).toBeErr(Cl.uint(500)); // ERR-PAUSED
   });
 
   it("should allow mint after marketplace is unpaused", () => {
