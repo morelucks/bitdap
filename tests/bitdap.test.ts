@@ -1392,3 +1392,104 @@ describe("Bitdap Pass - Batch Operations", () => {
     expect(result).toBeErr(Cl.uint(500)); // ERR-PAUSED
   });
 });
+describe("Bitdap Pass - Security and Access Control", () => {
+  it("should enforce admin-only functions", () => {
+    const adminFunctions = [
+      { fn: "pause", args: [] },
+      { fn: "unpause", args: [] },
+      { fn: "set-admin", args: [Cl.principal(address2)] },
+      { fn: "pause-marketplace", args: [] },
+      { fn: "unpause-marketplace", args: [] }
+    ];
+
+    adminFunctions.forEach(test => {
+      const { result } = simnet.callPublicFn(
+        contractName,
+        test.fn,
+        test.args,
+        address1 // Non-admin
+      );
+      expect(result).toBeErr(Cl.uint(200)); // ERR-UNAUTHORIZED
+    });
+  });
+
+  it("should prevent unauthorized token operations", () => {
+    // Mint token to address1
+    simnet.callPublicFn(
+      contractName,
+      "mint-pass",
+      [Cl.uint(1), Cl.none()],
+      address1
+    );
+
+    // Try to transfer from address2 (not owner)
+    const transferResult = simnet.callPublicFn(
+      contractName,
+      "transfer",
+      [Cl.uint(1), Cl.principal(address2)],
+      address2
+    );
+    expect(transferResult.result).toBeErr(Cl.uint(201)); // ERR-NOT-OWNER
+
+    // Try to burn from address2 (not owner)
+    const burnResult = simnet.callPublicFn(
+      contractName,
+      "burn",
+      [Cl.uint(1)],
+      address2
+    );
+    expect(burnResult.result).toBeErr(Cl.uint(201)); // ERR-NOT-OWNER
+  });
+
+  it("should validate input parameters", () => {
+    // Test invalid tier
+    const invalidTierResult = simnet.callPublicFn(
+      contractName,
+      "mint-pass",
+      [Cl.uint(999), Cl.none()],
+      address1
+    );
+    expect(invalidTierResult.result).toBeErr(Cl.uint(100)); // ERR-INVALID-TIER
+
+    // Test self-transfer
+    simnet.callPublicFn(
+      contractName,
+      "mint-pass",
+      [Cl.uint(1), Cl.none()],
+      address1
+    );
+
+    const selfTransferResult = simnet.callPublicFn(
+      contractName,
+      "transfer",
+      [Cl.uint(1), Cl.principal(address1)],
+      address1
+    );
+    expect(selfTransferResult.result).toBeErr(Cl.uint(110)); // ERR-SELF-TRANSFER
+  });
+
+  it("should handle contract pause state correctly", () => {
+    // Pause contract
+    simnet.callPublicFn(contractName, "pause", [], deployer);
+
+    // Test that operations are blocked
+    const mintResult = simnet.callPublicFn(
+      contractName,
+      "mint-pass",
+      [Cl.uint(1), Cl.none()],
+      address1
+    );
+    expect(mintResult.result).toBeErr(Cl.uint(500)); // ERR-PAUSED
+
+    // Unpause and test operations work again
+    simnet.callPublicFn(contractName, "unpause", [], deployer);
+
+    const mintAfterUnpause = simnet.callPublicFn(
+      contractName,
+      "mint-pass",
+      [Cl.uint(1), Cl.none()],
+      address1
+    );
+    expect(mintAfterUnpause.result).toBeOk(Cl.uint(1));
+  });
+});
