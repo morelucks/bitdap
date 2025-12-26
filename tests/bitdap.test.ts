@@ -1738,3 +1738,182 @@ describe("Bitdap Pass - Performance and Gas Optimization", () => {
     expect(totalSupply.result).toBeOk(Cl.uint(2));
   });
 });
+describe("Bitdap Pass - Integration and Comprehensive Coverage", () => {
+  it("should handle complete NFT lifecycle", () => {
+    // 1. Mint token
+    const mintResult = simnet.callPublicFn(
+      contractName,
+      "mint-pass",
+      [Cl.uint(2), Cl.some(Cl.stringUtf8("https://example.com/lifecycle.json"))],
+      address1
+    );
+    expect(mintResult.result).toBeOk(Cl.uint(1));
+
+    // 2. Verify initial state
+    const ownerResult = simnet.callReadOnlyFn(
+      contractName,
+      "get-owner",
+      [Cl.uint(1)],
+      address1
+    );
+    expect(ownerResult.result).toBeOk(Cl.principal(address1));
+
+    // 3. Transfer token
+    const transferResult = simnet.callPublicFn(
+      contractName,
+      "transfer",
+      [Cl.uint(1), Cl.principal(address2)],
+      address1
+    );
+    expect(transferResult.result).toBeOk(Cl.bool(true));
+
+    // 4. Verify transfer
+    const newOwnerResult = simnet.callReadOnlyFn(
+      contractName,
+      "get-owner",
+      [Cl.uint(1)],
+      address1
+    );
+    expect(newOwnerResult.result).toBeOk(Cl.principal(address2));
+
+    // 5. Create marketplace listing
+    const listingResult = simnet.callPublicFn(
+      contractName,
+      "create-listing",
+      [Cl.uint(1), Cl.uint(5000000), Cl.uint(1000)],
+      address2
+    );
+    expect(listingResult.result).toBeOk(Cl.uint(1));
+
+    // 6. Cancel listing
+    const cancelResult = simnet.callPublicFn(
+      contractName,
+      "cancel-listing",
+      [Cl.uint(1)],
+      address2
+    );
+    expect(cancelResult.result).toBeOk(Cl.bool(true));
+
+    // 7. Finally burn token
+    const burnResult = simnet.callPublicFn(
+      contractName,
+      "burn",
+      [Cl.uint(1)],
+      address2
+    );
+    expect(burnResult.result).toBeOk(Cl.bool(true));
+
+    // 8. Verify token is gone
+    const finalOwnerResult = simnet.callReadOnlyFn(
+      contractName,
+      "get-owner",
+      [Cl.uint(1)],
+      address1
+    );
+    expect(finalOwnerResult.result).toBeErr(Cl.uint(300)); // ERR-NOT-FOUND
+  });
+
+  it("should maintain data consistency across all operations", () => {
+    // Mint tokens of different tiers
+    const tiers = [1, 2, 3];
+    tiers.forEach(tier => {
+      simnet.callPublicFn(
+        contractName,
+        "mint-pass",
+        [Cl.uint(tier), Cl.none()],
+        address1
+      );
+    });
+
+    // Verify total supply
+    const totalSupply = simnet.callReadOnlyFn(
+      contractName,
+      "get-total-supply",
+      [],
+      address1
+    );
+    expect(totalSupply.result).toBeOk(Cl.uint(3));
+
+    // Verify tier supplies
+    tiers.forEach(tier => {
+      const tierSupply = simnet.callReadOnlyFn(
+        contractName,
+        "get-tier-supply",
+        [Cl.uint(tier)],
+        address1
+      );
+      expect(tierSupply.result).toBeOk(Cl.uint(1));
+    });
+
+    // Verify counters
+    const counters = simnet.callReadOnlyFn(
+      contractName,
+      "get-counters",
+      [],
+      address1
+    );
+    expect(counters.result).toBeOk(
+      Cl.tuple({
+        users: Cl.uint(1),
+        listings: Cl.uint(0),
+        transactions: Cl.uint(3)
+      })
+    );
+
+    // Transfer one token and verify counters update
+    simnet.callPublicFn(
+      contractName,
+      "transfer",
+      [Cl.uint(1), Cl.principal(address2)],
+      address1
+    );
+
+    const updatedCounters = simnet.callReadOnlyFn(
+      contractName,
+      "get-counters",
+      [],
+      address1
+    );
+    expect(updatedCounters.result).toBeOk(
+      Cl.tuple({
+        users: Cl.uint(2), // New user (address2)
+        listings: Cl.uint(0),
+        transactions: Cl.uint(4) // One more transaction
+      })
+    );
+  });
+
+  it("should handle all error conditions gracefully", () => {
+    // Test all major error conditions are properly handled
+    const errorTests = [
+      {
+        name: "Invalid tier",
+        fn: () => simnet.callPublicFn(contractName, "mint-pass", [Cl.uint(99), Cl.none()], address1),
+        expectedError: 100
+      },
+      {
+        name: "Non-existent token",
+        fn: () => simnet.callReadOnlyFn(contractName, "get-owner", [Cl.uint(999)], address1),
+        expectedError: 300
+      },
+      {
+        name: "Unauthorized operation",
+        fn: () => simnet.callPublicFn(contractName, "pause", [], address1),
+        expectedError: 200
+      },
+      {
+        name: "Self transfer",
+        fn: () => {
+          simnet.callPublicFn(contractName, "mint-pass", [Cl.uint(1), Cl.none()], address1);
+          return simnet.callPublicFn(contractName, "transfer", [Cl.uint(1), Cl.principal(address1)], address1);
+        },
+        expectedError: 110
+      }
+    ];
+
+    errorTests.forEach(test => {
+      const result = test.fn();
+      expect(result.result).toBeErr(Cl.uint(test.expectedError));
+    });
+  });
+});
