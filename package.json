@@ -13,7 +13,13 @@
     "txs:bitdap:100": "tsx scripts/send-100-txs.ts",
     "token-interact": "tsx scripts/token-interaction.ts",
     "build": "tsc",
-    "dev": "tsx --watch scripts/token-interaction.ts"
+    "dev": "tsx --watch scripts/token-interaction.ts",
+    "token:help": "npm run token-interact -- --help",
+    "token:mint": "npm run token-interact mint",
+    "token:transfer": "npm run token-interact transfer", 
+    "token:query": "npm run token-interact query",
+    "token:config": "npm run token-interact config",
+    "token:batch": "npm run token-interact batch"
   },
   "author": "",
   "license": "ISC",
