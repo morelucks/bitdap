@@ -1,259 +1,37 @@
 .container {
-  max-width: 1000px;
-  margin: 2rem auto;
-  padding: 0 1rem;
-}
-
-.header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 2rem;
-  padding-bottom: 1rem;
-  border-bottom: 2px solid #e9ecef;
-}
-
-.header h2 {
-  margin: 0;
-  color: #212529;
-  font-size: 1.75rem;
-}
-
-.networkBadge {
-  display: inline-block;
-  padding: 0.5rem 1rem;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  border-radius: 20px;
-  font-size: 0.9rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.contractsGrid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-  gap: 1.5rem;
-  margin-bottom: 2rem;
-}
-
-.contractCard {
-  background: white;
-  border: 1px solid #e9ecef;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 12px;
-  padding: 1.5rem;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-  transition: all 0.3s ease;
+  padding: 20px;
+  margin-bottom: 20px;
 }
-
-.contractCard:hover {
-  border-color: #667eea;
-  box-shadow: 0 4px 16px rgba(102, 126, 234, 0.15);
-  transform: translateY(-2px);
+.title {
+  color: var(--text-primary);
+  font-size: 18px;
+  font-weight: 700;
+  margin: 0 0 16px;
 }
-
-.cardHeader {
+.info {
+  display: grid;
+  gap: 12px;
+}
+.item {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 1rem;
-}
-
-.cardHeader h3 {
-  margin: 0;
-  color: #212529;
-  font-size: 1.25rem;
-}
-
-.explorerLink {
-  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 6px;
-  background: #f8f9fa;
-  color: #667eea;
-  border: 1px solid #e9ecef;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  text-decoration: none;
+  padding: 12px;
+  background: var(--background);
+  border-radius: 8px;
+  border: 1px solid var(--border);
 }
-
-.explorerLink:hover {
-  background: #667eea;
-  color: white;
-  border-color: #667eea;
-}
-
-.description {
-  margin: 0 0 1rem 0;
-  color: #6c757d;
-  font-size: 0.95rem;
-  line-height: 1.5;
-}
-
-.addressSection {
-  margin-bottom: 1.5rem;
-}
-
 .label {
-  display: block;
-  margin-bottom: 0.5rem;
-  color: #495057;
-  font-size: 0.85rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.addressContainer {
-  display: flex;
-  gap: 0.5rem;
-  align-items: center;
-}
-
-.address {
-  flex: 1;
-  padding: 0.75rem;
-  background: #f8f9fa;
-  border: 1px solid #e9ecef;
-  border-radius: 6px;
-  font-family: 'Courier New', monospace;
-  font-size: 0.85rem;
-  color: #212529;
-  word-break: break-all;
-  margin: 0;
-}
-
-.copyButton {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  padding: 0;
-  background: #f8f9fa;
-  border: 1px solid #e9ecef;
-  border-radius: 6px;
-  color: #667eea;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  flex-shrink: 0;
-}
-
-.copyButton:hover {
-  background: #667eea;
-  color: white;
-  border-color: #667eea;
-}
-
-.copyButton:active {
-  transform: scale(0.95);
-}
-
-.linksSection {
-  display: flex;
-  gap: 0.75rem;
-}
-
-.primaryLink {
-  flex: 1;
-  display: inline-block;
-  padding: 0.75rem 1rem;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  text-decoration: none;
-  border-radius: 6px;
-  font-weight: 600;
-  text-align: center;
-  transition: all 0.2s ease;
-  border: none;
-  cursor: pointer;
-}
-
-.primaryLink:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-}
-
-.infoBox {
-  background: linear-gradient(135deg, #f8f9fa 0%, #f0f4ff 100%);
-  border: 1px solid #e9ecef;
-  border-radius: 12px;
-  padding: 1.5rem;
-}
-
-.infoBox h4 {
-  margin: 0 0 1rem 0;
-  color: #212529;
-  font-size: 1.1rem;
-}
-
-.infoGrid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 1.5rem;
-}
-
-.infoItem {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.infoLabel {
-  color: #495057;
-  font-size: 0.85rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.infoValue {
-  color: #212529;
-  font-size: 0.95rem;
+  color: var(--text-secondary);
+  font-size: 13px;
   font-weight: 500;
 }
-
-.infoLink {
-  color: #667eea;
-  text-decoration: none;
-  font-size: 0.95rem;
+.value {
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 600;
   word-break: break-all;
-  transition: color 0.2s ease;
-}
-
-.infoLink:hover {
-  color: #764ba2;
-  text-decoration: underline;
-}
-
-@media (max-width: 768px) {
-  .container {
-    margin: 1rem auto;
-  }
-
-  .header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 1rem;
-  }
-
-  .contractsGrid {
-    grid-template-columns: 1fr;
-  }
-
-  .addressContainer {
-    flex-direction: column;
-  }
-
-  .copyButton {
-    width: 100%;
-  }
-
-  .infoGrid {
-    grid-template-columns: 1fr;
-  }
 }
