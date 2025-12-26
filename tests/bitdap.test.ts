@@ -446,14 +446,14 @@ describe("Bitdap Pass - Admin Controls", () => {
     const { result: pauseRes } = simnet.callPublicFn(contractName, "pause", [], admin);
     expect(pauseRes).toBeOk(Cl.bool(true));
 
-    // Mint should fail with ERR-PAUSED (u107)
+    // Mint should fail with ERR-PAUSED (u500)
     const { result: mintRes } = simnet.callPublicFn(
       contractName,
       "mint-pass",
       [Cl.uint(1), Cl.none()],
       admin
     );
-    expect(mintRes).toBeErr(Cl.uint(107));
+    expect(mintRes).toBeErr(Cl.uint(500));
 
     // Prepare a minted token before transfer test: unpause -> mint -> pause
     simnet.callPublicFn(contractName, "unpause", [], admin);
@@ -465,14 +465,14 @@ describe("Bitdap Pass - Admin Controls", () => {
     );
     simnet.callPublicFn(contractName, "pause", [], admin);
 
-    // Transfer should fail with ERR-PAUSED (u107)
+    // Transfer should fail with ERR-PAUSED (u500)
     const { result: transferRes } = simnet.callPublicFn(
       contractName,
       "transfer",
       [Cl.uint(1), Cl.principal(user)],
       admin
     );
-    expect(transferRes).toBeErr(Cl.uint(107));
+    expect(transferRes).toBeErr(Cl.uint(500));
 
     // Unpause and transfer should succeed
     const { result: unpauseRes } = simnet.callPublicFn(
@@ -521,14 +521,14 @@ describe("Bitdap Pass - Admin Controls", () => {
     );
     expect(uriRes.result).toBeOk(newUri);
 
-    // Non-admin attempt should fail with ERR-UNAUTHORIZED (u106)
+    // Non-admin attempt should fail with ERR-UNAUTHORIZED (u200)
     const { result: setUriNonAdmin } = simnet.callPublicFn(
       contractName,
       "set-token-uri",
       [Cl.uint(1), Cl.some(Cl.stringUtf8("https://not-allowed"))],
       user
     );
-    expect(setUriNonAdmin).toBeErr(Cl.uint(106));
+    expect(setUriNonAdmin).toBeErr(Cl.uint(200));
   });
 });
 
