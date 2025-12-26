@@ -196,7 +196,7 @@ describe("Bitdap Pass - Transfer Functionality", () => {
       [Cl.uint(1), Cl.principal(address2)],
       address2
     );
-    expect(result).toBeErr(Cl.uint(102)); // ERR-NOT-OWNER
+    expect(result).toBeErr(Cl.uint(201)); // ERR-NOT-OWNER
   });
 
   it("should reject self-transfer", () => {
@@ -206,7 +206,7 @@ describe("Bitdap Pass - Transfer Functionality", () => {
       [Cl.uint(1), Cl.principal(address1)],
       address1
     );
-    expect(result).toBeErr(Cl.uint(103)); // ERR-SELF-TRANSFER
+    expect(result).toBeErr(Cl.uint(110)); // ERR-SELF-TRANSFER
   });
 
   it("should reject transfer of non-existent token", () => {
@@ -216,7 +216,7 @@ describe("Bitdap Pass - Transfer Functionality", () => {
       [Cl.uint(999), Cl.principal(address2)],
       address1
     );
-    expect(result).toBeErr(Cl.uint(101)); // ERR-NOT-FOUND
+    expect(result).toBeErr(Cl.uint(300)); // ERR-NOT-FOUND
   });
 });
 
