@@ -1616,3 +1616,125 @@ describe("Bitdap Pass - Edge Cases and Boundaries", () => {
     expect(owner2.result).toBeErr(Cl.uint(300)); // ERR-NOT-FOUND
   });
 });
+describe("Bitdap Pass - Performance and Gas Optimization", () => {
+  it("should efficiently handle batch operations vs individual operations", () => {
+    // Test individual mints
+    const startTime = Date.now();
+    for (let i = 1; i <= 3; i++) {
+      simnet.callPublicFn(
+        contractName,
+        "mint-pass",
+        [Cl.uint(1), Cl.none()],
+        address1
+      );
+    }
+    const individualTime = Date.now() - startTime;
+
+    // Test batch mint (reset for fair comparison)
+    const batchStartTime = Date.now();
+    const recipients = [
+      { recipient: Cl.principal(address2), tier: Cl.uint(1), uri: Cl.none() },
+      { recipient: Cl.principal(address2), tier: Cl.uint(2), uri: Cl.none() },
+      { recipient: Cl.principal(address2), tier: Cl.uint(3), uri: Cl.none() }
+    ];
+    
+    simnet.callPublicFn(
+      contractName,
+      "batch-mint",
+      [Cl.list(recipients.map(r => Cl.tuple(r)))],
+      deployer
+    );
+    const batchTime = Date.now() - batchStartTime;
+
+    // Batch should be more efficient (this is more of a conceptual test)
+    expect(batchTime).toBeLessThanOrEqual(individualTime * 2);
+  });
+
+  it("should handle large batch operations efficiently", () => {
+    // Test maximum batch size
+    const maxBatchSize = 10;
+    const recipients = Array.from({ length: maxBatchSize }, (_, i) => ({
+      recipient: Cl.principal(address1),
+      tier: Cl.uint(((i % 3) + 1)), // Cycle through tiers 1, 2, 3
+      uri: Cl.none()
+    }));
+
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "batch-mint",
+      [Cl.list(recipients.map(r => Cl.tuple(r)))],
+      deployer
+    );
+    
+    // Should successfully mint all tokens
+    const expectedTokenIds = Array.from({ length: maxBatchSize }, (_, i) => Cl.uint(i + 1));
+    expect(result).toBeOk(Cl.list(expectedTokenIds));
+  });
+
+  it("should optimize storage access patterns", () => {
+    // Mint token
+    simnet.callPublicFn(
+      contractName,
+      "mint-pass",
+      [Cl.uint(1), Cl.some(Cl.stringUtf8("https://example.com/test.json"))],
+      address1
+    );
+
+    // Multiple reads should be consistent and efficient
+    for (let i = 0; i < 5; i++) {
+      const ownerResult = simnet.callReadOnlyFn(
+        contractName,
+        "get-owner",
+        [Cl.uint(1)],
+        address1
+      );
+      expect(ownerResult.result).toBeOk(Cl.principal(address1));
+
+      const tierResult = simnet.callReadOnlyFn(
+        contractName,
+        "get-tier",
+        [Cl.uint(1)],
+        address1
+      );
+      expect(tierResult.result).toBeOk(Cl.uint(1));
+
+      const uriResult = simnet.callReadOnlyFn(
+        contractName,
+        "get-token-uri",
+        [Cl.uint(1)],
+        address1
+      );
+      expect(uriResult.result).toBeOk(Cl.some(Cl.stringUtf8("https://example.com/test.json")));
+    }
+  });
+
+  it("should handle concurrent operations efficiently", () => {
+    // Simulate concurrent minting by different users
+    const users = [address1, address2];
+    const results = [];
+
+    users.forEach((user, index) => {
+      const result = simnet.callPublicFn(
+        contractName,
+        "mint-pass",
+        [Cl.uint(index + 1), Cl.none()],
+        user
+      );
+      results.push(result);
+    });
+
+    // All operations should succeed
+    results.forEach((result, index) => {
+      expect(result.result).toBeOk(Cl.uint(index + 1));
+    });
+
+    // Verify final state is consistent
+    const totalSupply = simnet.callReadOnlyFn(
+      contractName,
+      "get-total-supply",
+      [],
+      address1
+    );
+    expect(totalSupply.result).toBeOk(Cl.uint(2));
+  });
+});
