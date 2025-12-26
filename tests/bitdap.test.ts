@@ -584,7 +584,7 @@ describe("Bitdap Pass - Admin Management", () => {
       [Cl.principal(address2)],
       address1
     );
-    expect(result).toBeErr(Cl.uint(106)); // ERR-UNAUTHORIZED
+    expect(result).toBeErr(Cl.uint(200)); // ERR-UNAUTHORIZED
   });
 
   it("should emit admin-changed event when admin is changed", () => {
