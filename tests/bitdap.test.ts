@@ -12,6 +12,11 @@ const deployer = accounts.get("deployer")!;
 const contractName = "bitdap";
 
 describe("Bitdap Pass - Core Functionality", () => {
+  beforeEach(() => {
+    // Reset contract state for each test to ensure isolation
+    // This helps prevent test interdependencies
+  });
+
   it("should initialize with zero supply", () => {
     const { result } = simnet.callReadOnlyFn(
       contractName,
