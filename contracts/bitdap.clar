@@ -2328,7 +2328,7 @@
             })
             
             ;; Apply the configuration change
-            (try! (apply-config-change config-key new-value))
+            (unwrap! (apply-config-change config-key new-value) ERR-INTERNAL-ERROR)
             
             (var-set next-config-version (+ version u1))
             
@@ -2513,7 +2513,7 @@
             )
                 (begin
                     ;; Apply rollback
-                    (try! (apply-config-change config-key rollback-value))
+                    (unwrap! (apply-config-change config-key rollback-value) ERR-INTERNAL-ERROR)
                     
                     ;; Record rollback in history
                     (let ((version (var-get next-config-version)))
