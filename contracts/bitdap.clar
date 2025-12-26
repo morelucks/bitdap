@@ -927,7 +927,9 @@
     (begin
         (asserts! (not (var-get marketplace-paused)) ERR-PAUSED)
         (asserts! (> price u0) ERR-INVALID-PRICE)
-        (asserts! (> expiry-blocks u0) ERR-INVALID-PRICE)
+        (asserts! (> expiry-blocks u0) ERR-INVALID-EXPIRY)
+        (asserts! (<= price (var-get max-listing-price)) ERR-LISTING-PRICE-TOO-HIGH)
+        (asserts! (>= price (var-get min-listing-price)) ERR-LISTING-PRICE-TOO-LOW)
         (match (map-get? token-owners { token-id: token-id })
             owner-data (let ((owner (get owner owner-data)))
                 (if (not (is-eq owner tx-sender))
@@ -1054,10 +1056,6 @@
                     )
                 )
             )
-            ERR-LISTING-NOT-FOUND
-        )
-    )
-)
             ERR-LISTING-NOT-FOUND
         )
     )
@@ -1429,7 +1427,8 @@
 (define-public (set-marketplace-fee (fee-percent uint))
     (begin
         (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-UNAUTHORIZED)
-        (asserts! (<= fee-percent u10) ERR-INVALID-PRICE)
+        (asserts! (<= fee-percent u10) ERR-INVALID-AMOUNT) ;; Max 10% fee
+        (asserts! (>= fee-percent u0) ERR-INVALID-AMOUNT) ;; Min 0% fee
         (var-set marketplace-fee-percent fee-percent)
         (print (tuple
             (event "marketplace-fee-updated")
