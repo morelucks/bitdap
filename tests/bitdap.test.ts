@@ -1207,3 +1207,100 @@ describe("Bitdap Pass - Error Handling", () => {
     expect(result4.result).toBeErr(Cl.uint(100)); // ERR-INVALID-TIER
   });
 });
+describe("Bitdap Pass - Marketplace Functionality", () => {
+  beforeEach(() => {
+    // Mint a token for marketplace testing
+    simnet.callPublicFn(
+      contractName,
+      "mint-pass",
+      [Cl.uint(1), Cl.none()],
+      address1
+    );
+  });
+
+  it("should create a listing successfully", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "create-listing",
+      [Cl.uint(1), Cl.uint(1000000), Cl.uint(100)], // token-id, price, expiry
+      address1
+    );
+    expect(result).toBeOk(Cl.uint(1)); // First listing ID
+  });
+
+  it("should get listing details", () => {
+    // Create listing first
+    simnet.callPublicFn(
+      contractName,
+      "create-listing",
+      [Cl.uint(1), Cl.uint(1000000), Cl.uint(100)],
+      address1
+    );
+
+    // Get listing details
+    const { result } = simnet.callReadOnlyFn(
+      contractName,
+      "get-listing",
+      [Cl.uint(1)],
+      address1
+    );
+    expect(result).toBeOk(
+      Cl.tuple({
+        "token-id": Cl.uint(1),
+        seller: Cl.principal(address1),
+        price: Cl.uint(1000000),
+        active: Cl.bool(true),
+        "created-at": Cl.uint(expect.any(Number)),
+        "expiry-block": Cl.uint(expect.any(Number))
+      })
+    );
+  });
+
+  it("should update listing price", () => {
+    // Create listing first
+    simnet.callPublicFn(
+      contractName,
+      "create-listing",
+      [Cl.uint(1), Cl.uint(1000000), Cl.uint(100)],
+      address1
+    );
+
+    // Update price
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "update-listing-price",
+      [Cl.uint(1), Cl.uint(2000000)],
+      address1
+    );
+    expect(result).toBeOk(Cl.bool(true));
+  });
+
+  it("should cancel listing", () => {
+    // Create listing first
+    simnet.callPublicFn(
+      contractName,
+      "create-listing",
+      [Cl.uint(1), Cl.uint(1000000), Cl.uint(100)],
+      address1
+    );
+
+    // Cancel listing
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "cancel-listing",
+      [Cl.uint(1)],
+      address1
+    );
+    expect(result).toBeOk(Cl.bool(true));
+  });
+
+  it("should reject listing creation from non-owner", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "create-listing",
+      [Cl.uint(1), Cl.uint(1000000), Cl.uint(100)],
+      address2 // Not the owner
+    );
+    expect(result).toBeErr(Cl.uint(201)); // ERR-NOT-OWNER
+  });
+});
