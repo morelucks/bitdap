@@ -180,9 +180,6 @@
 ;; Contract owner (admin) - initialized to contract deployer
 (define-data-var contract-owner principal tx-sender)
 
-;; Pause flag (when true, mint/transfer are disabled)
-(define-data-var paused bool false)
-
 ;; Marketplace pause flag (when true, marketplace operations are disabled)
 (define-data-var marketplace-paused bool false)
 
@@ -231,7 +228,7 @@
 )
 
 (define-private (validate-not-paused)
-    (if (var-get paused)
+    (if (or (var-get mint-paused) (var-get transfer-paused))
         ERR-PAUSED
         (ok true)
     )
@@ -596,7 +593,11 @@
 )
 
 (define-read-only (is-paused)
-    (ok (var-get paused))
+    (ok (tuple 
+        (mint-paused (var-get mint-paused))
+        (transfer-paused (var-get transfer-paused))
+        (marketplace-paused (var-get marketplace-paused))
+    ))
 )
 
 (define-public (mint-pass
@@ -1100,7 +1101,8 @@
 (define-public (pause)
     (begin
         (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-UNAUTHORIZED)
-        (var-set paused true)
+        (var-set mint-paused true)
+        (var-set transfer-paused true)
         (ok true)
     )
 )
@@ -1109,7 +1111,8 @@
 (define-public (unpause)
     (begin
         (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-UNAUTHORIZED)
-        (var-set paused false)
+        (var-set mint-paused false)
+        (var-set transfer-paused false)
         (ok true)
     )
 )
@@ -1300,7 +1303,7 @@
 (define-public (batch-mint (recipients (list 10 { recipient: principal, tier: uint, uri: (optional (string-utf8 256)) })))
     (begin
         (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-UNAUTHORIZED)
-        (asserts! (not (var-get paused)) ERR-PAUSED)
+        (asserts! (not (or (var-get mint-paused) (var-get transfer-paused))) ERR-PAUSED)
         (fold batch-mint-helper recipients (ok (list)))
     )
 )
@@ -1370,7 +1373,7 @@
 ;; Batch transfer multiple tokens (owner must be tx-sender for all)
 (define-public (batch-transfer (transfers (list 10 { token-id: uint, recipient: principal })))
     (begin
-        (asserts! (not (var-get paused)) ERR-PAUSED)
+        (asserts! (not (var-get transfer-paused)) ERR-PAUSED)
         (fold batch-transfer-helper transfers (ok true))
     )
 )
@@ -2592,7 +2595,6 @@
 (define-read-only (get-contract-status)
     (ok (tuple
         (version u3) ;; Contract version
-        (paused (var-get paused))
         (mint-paused (var-get mint-paused))
         (transfer-paused (var-get transfer-paused))
         (marketplace-paused (var-get marketplace-operations-paused))
