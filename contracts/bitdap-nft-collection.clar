@@ -205,6 +205,28 @@
     (<= percent max-percent)
 )
 
+;; Error logging system
+(define-private (log-error (error-code uint) (context (string-ascii 64)) (caller principal))
+    (print {
+        event: "error-occurred",
+        error-code: error-code,
+        context: context,
+        caller: caller,
+        timestamp: block-height,
+        block-height: block-height
+    })
+)
+
+(define-private (log-validation-failure (field (string-ascii 32)) (value (string-ascii 64)) (expected (string-ascii 64)))
+    (print {
+        event: "validation-failed",
+        field: field,
+        provided-value: value,
+        expected-value: expected,
+        timestamp: block-height
+    })
+)
+
 ;; Check if caller is contract owner
 (define-private (is-owner (caller principal))
     (is-eq caller (var-get contract-owner))
