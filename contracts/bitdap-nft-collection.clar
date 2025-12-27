@@ -12,7 +12,7 @@
 
 ;; Constants
 
-;; Error codes
+;; Enhanced Error codes with detailed context
 (define-constant ERR-UNAUTHORIZED (err u401))
 (define-constant ERR-NOT-FOUND (err u404))
 (define-constant ERR-INVALID-AMOUNT (err u400))
@@ -29,6 +29,12 @@
 (define-constant ERR-BATCH-LIMIT-EXCEEDED (err u413))
 (define-constant ERR-INVALID-METADATA (err u414))
 (define-constant ERR-TRANSFER-FAILED (err u415))
+;; New enhanced error codes
+(define-constant ERR-INVALID-STRING-LENGTH (err u416))
+(define-constant ERR-ZERO-ADDRESS (err u417))
+(define-constant ERR-INVALID-PERCENTAGE (err u418))
+(define-constant ERR-OPERATION-FAILED (err u419))
+(define-constant ERR-INVALID-STATE (err u420))
 
 ;; Collection constants
 (define-constant MAX-ROYALTY-PERCENT u1000) ;; 10% maximum royalty
