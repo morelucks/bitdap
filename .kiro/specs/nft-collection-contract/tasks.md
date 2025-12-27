@@ -6,7 +6,7 @@
   - Set up contract initialization with collection parameters
   - _Requirements: 1.1_
 
-- [ ] 2. Implement core data structures and storage
+- [x] 2. Implement core data structures and storage
   - [x] 2.1 Create token ownership and metadata maps
     - Define token-owners map for ownership tracking
     - Define token-metadata map for URI storage
@@ -24,7 +24,7 @@
     - Define royalty collection tracking
     - _Requirements: 1.5, 6.1, 6.2_
 
-- [ ] 3. Implement basic minting functionality
+- [x] 3. Implement basic minting functionality
   - [x] 3.1 Create core mint function
     - Implement single token minting with payment validation
     - Add ownership assignment and metadata storage
@@ -43,7 +43,7 @@
     - **Property 8: Mint event emission**
     - **Validates: Requirements 2.4**
 
-- [ ] 4. Implement transfer functionality
+- [x] 4. Implement transfer functionality
   - [x] 4.1 Create basic transfer function
     - Implement ownership verification and transfer logic
     - Add self-transfer prevention

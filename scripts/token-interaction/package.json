@@ -1,0 +1,54 @@
+{
+  "name": "bitdap-token-interaction-script",
+  "version": "1.0.0",
+  "description": "Comprehensive CLI tool for interacting with Bitdap Pass NFT contract",
+  "main": "dist/index.js",
+  "bin": {
+    "bitdap-cli": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "ts-node src/index.ts",
+    "start": "node dist/index.js",
+    "test": "jest",
+    "lint": "eslint src/**/*.ts",
+    "clean": "rm -rf dist"
+  },
+  "keywords": ["stacks", "nft", "cli", "blockchain", "bitdap"],
+  "author": "Bitdap Team",
+  "license": "MIT",
+  "dependencies": {
+    "@stacks/transactions": "^6.13.1",
+    "@stacks/network": "^6.13.0",
+    "@stacks/common": "^6.13.0",
+    "@stacks/encryption": "^6.13.0",
+    "yargs": "^17.7.2",
+    "chalk": "^4.1.2",
+    "cli-table3": "^0.6.3",
+    "csv-writer": "^1.6.0",
+    "csv-parser": "^3.0.0",
+    "winston": "^3.11.0",
+    "winston-daily-rotate-file": "^4.7.1",
+    "inquirer": "^8.2.6",
+    "fs-extra": "^11.1.1",
+    "joi": "^17.11.0",
+    "axios": "^1.6.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/yargs": "^17.0.32",
+    "@types/inquirer": "^9.0.7",
+    "@types/fs-extra": "^11.0.4",
+    "@types/jest": "^29.5.8",
+    "typescript": "^5.3.2",
+    "ts-node": "^10.9.1",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.1",
+    "eslint": "^8.54.0",
+    "@typescript-eslint/eslint-plugin": "^6.12.0",
+    "@typescript-eslint/parser": "^6.12.0"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}

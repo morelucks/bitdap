@@ -10,6 +10,9 @@ import { ApproveNFTCommand } from './commands/approve-nft-command.js';
 import { QueryNFTCommand } from './commands/query-nft-command.js';
 import { AdminNFTCommand } from './commands/admin-nft-command.js';
 import { BatchNFTCommand } from './commands/batch-nft-command.js';
+import { MetadataNFTCommand } from './commands/metadata-nft-command.js';
+import { AnalyticsNFTCommand } from './commands/analytics-nft-command.js';
+import { MarketplaceNFTCommand } from './commands/marketplace-nft-command.js';
 import { Logger } from '../logging/logger.js';
 import chalk from 'chalk';
 
@@ -35,6 +38,9 @@ export class NFTCLIIntegration {
     const queryCommand = new QueryNFTCommand();
     const adminCommand = new AdminNFTCommand();
     const batchCommand = new BatchNFTCommand();
+    const metadataCommand = new MetadataNFTCommand();
+    const analyticsCommand = new AnalyticsNFTCommand();
+    const marketplaceCommand = new MarketplaceNFTCommand();
 
     // Store command instances
     this.commands.set('mint', mintCommand);
@@ -43,6 +49,9 @@ export class NFTCLIIntegration {
     this.commands.set('query', queryCommand);
     this.commands.set('admin', adminCommand);
     this.commands.set('batch', batchCommand);
+    this.commands.set('metadata', metadataCommand);
+    this.commands.set('analytics', analyticsCommand);
+    this.commands.set('marketplace', marketplaceCommand);
 
     // Register commands with router
     this.router.registerCommand(mintCommand.getDefinition());
@@ -51,6 +60,9 @@ export class NFTCLIIntegration {
     this.router.registerCommand(queryCommand.getDefinition());
     this.router.registerCommand(adminCommand.getDefinition());
     this.router.registerCommand(batchCommand.getDefinition());
+    this.router.registerCommand(metadataCommand.getDefinition());
+    this.router.registerCommand(analyticsCommand.getDefinition());
+    this.router.registerCommand(marketplaceCommand.getDefinition());
 
     this.logger.info('NFT collection commands registered', {
       commandCount: this.commands.size,
@@ -108,10 +120,26 @@ export class NFTCLIIntegration {
     console.log('  batch-nft       - Alias for nft-batch');
     console.log('  nbatch          - Short alias for nft-batch');
     
+    console.log(chalk.green('\nMetadata:'));
+    console.log('  nft-metadata    - Create and manage NFT metadata');
+    console.log('  metadata-nft    - Alias for nft-metadata');
+    console.log('  nmeta           - Short alias for nft-metadata');
+    
+    console.log(chalk.green('\nAnalytics:'));
+    console.log('  nft-analytics   - Generate analytics and reports');
+    console.log('  analytics-nft   - Alias for nft-analytics');
+    console.log('  nanalytics      - Short alias for nft-analytics');
+    
+    console.log(chalk.green('\nMarketplace:'));
+    console.log('  nft-marketplace - Access marketplace data');
+    console.log('  marketplace-nft - Alias for nft-marketplace');
+    console.log('  nmarket         - Short alias for nft-marketplace');
+    
     console.log(chalk.yellow('\nExamples:'));
     console.log('  npm run token-interact nft-mint --recipient ST1ADDR... --private-key YOUR_KEY');
     console.log('  npm run token-interact nft-query --type collection');
-    console.log('  npm run token-interact nft-batch --operation mint --recipients "ST1ADDR1...,ST1ADDR2..." --private-key YOUR_KEY');
+    console.log('  npm run token-interact nft-analytics --type summary');
+    console.log('  npm run token-interact nft-marketplace --action info');
     
     console.log(chalk.gray('\nUse --help with any command for detailed information.'));
   }
@@ -128,7 +156,10 @@ export class NFTCLIIntegration {
         approvals: 1,
         queries: 1,
         administration: 1,
-        batch: 1
+        batch: 1,
+        metadata: 1,
+        analytics: 1,
+        marketplace: 1
       },
       aliases: {
         'nft-mint': ['mint-nft', 'nm'],
@@ -136,7 +167,10 @@ export class NFTCLIIntegration {
         'nft-approve': ['approve-nft', 'na'],
         'nft-query': ['query-nft', 'nq'],
         'nft-admin': ['admin-nft', 'nadmin'],
-        'nft-batch': ['batch-nft', 'nbatch']
+        'nft-batch': ['batch-nft', 'nbatch'],
+        'nft-metadata': ['metadata-nft', 'nmeta'],
+        'nft-analytics': ['analytics-nft', 'nanalytics'],
+        'nft-marketplace': ['marketplace-nft', 'nmarket']
       }
     };
   }
@@ -352,7 +386,10 @@ export class NFTCLIIntegration {
       'nft-approve', 'approve-nft', 'na',
       'nft-query', 'query-nft', 'nq',
       'nft-admin', 'admin-nft', 'nadmin',
-      'nft-batch', 'batch-nft', 'nbatch'
+      'nft-batch', 'batch-nft', 'nbatch',
+      'nft-metadata', 'metadata-nft', 'nmeta',
+      'nft-analytics', 'analytics-nft', 'nanalytics',
+      'nft-marketplace', 'marketplace-nft', 'nmarket'
     ];
     
     return nftCommands.includes(commandName);
