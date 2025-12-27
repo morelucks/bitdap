@@ -1268,3 +1268,82 @@ describe("Bitdap Multi Token - Complex Scenarios", () => {
     expect(wallet1Balance.result).toBeOk(Cl.uint(4500));
   });
 });
+describe("Bitdap Multi Token - Performance and Stress Tests", () => {
+  it("should handle multiple token creations efficiently", () => {
+    const tokenCount = 10;
+    const createdTokens = [];
+
+    for (let i = 1; i <= tokenCount; i++) {
+      const { result } = simnet.callPublicFn(
+        contractName,
+        "create-token",
+        [
+          Cl.stringUtf8(`Stress Token ${i}`),
+          Cl.stringUtf8(`ST${i}`),
+          Cl.uint(18),
+          Cl.bool(i % 2 === 0), // Alternate between fungible and non-fungible
+          Cl.some(Cl.stringUtf8(`https://example.com/token/${i}`))
+        ],
+        deployer
+      );
+      expect(result).toBeOk(Cl.uint(i));
+      createdTokens.push(i);
+    }
+
+    // Verify all tokens exist
+    createdTokens.forEach(tokenId => {
+      const existsResult = simnet.callReadOnlyFn(
+        contractName,
+        "token-exists",
+        [Cl.uint(tokenId)],
+        deployer
+      );
+      expect(existsResult.result).toBeOk(Cl.bool(true));
+    });
+  });
+
+  it("should handle batch operations with maximum list size", () => {
+    // Create tokens first
+    for (let i = 1; i <= 10; i++) {
+      simnet.callPublicFn(
+        contractName,
+        "create-token",
+        [
+          Cl.stringUtf8(`Batch Token ${i}`),
+          Cl.stringUtf8(`BT${i}`),
+          Cl.uint(18),
+          Cl.bool(true),
+          Cl.none()
+        ],
+        deployer
+      );
+    }
+
+    // Batch mint to maximum list size (10)
+    const tokenIds = Array.from({length: 10}, (_, i) => i + 1);
+    const amounts = Array.from({length: 10}, (_, i) => (i + 1) * 100);
+
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "batch-mint",
+      [
+        Cl.principal(wallet1),
+        Cl.list(tokenIds.map(id => Cl.uint(id))),
+        Cl.list(amounts.map(amt => Cl.uint(amt)))
+      ],
+      deployer
+    );
+    expect(result).toBeOk(Cl.bool(true));
+
+    // Verify all balances
+    tokenIds.forEach((tokenId, index) => {
+      const balanceResult = simnet.callReadOnlyFn(
+        contractName,
+        "get-balance",
+        [Cl.principal(wallet1), Cl.uint(tokenId)],
+        deployer
+      );
+      expect(balanceResult.result).toBeOk(Cl.uint(amounts[index]));
+    });
+  });
+});
