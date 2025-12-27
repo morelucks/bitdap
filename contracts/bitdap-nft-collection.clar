@@ -957,6 +957,11 @@
 )
 
 ;; Check if operator is approved for all tokens of owner
+(define-private (is-approved-for-all (owner principal) (operator principal))
+    (default-to false (get approved (map-get? operator-approvals { owner: owner, operator: operator })))
+)
+
+;; Check if operator is approved for all tokens of owner
 (define-read-only (is-approved-for-all-query (owner principal) (operator principal))
     (ok (is-approved-for-all owner operator))
 )

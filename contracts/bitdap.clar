@@ -920,54 +920,61 @@
 ;; Listing expires after specified block height
 (define-public (create-listing (token-id uint) (price uint) (expiry-blocks uint))
     (begin
-        (asserts! (not (var-get marketplace-paused)) ERR-PAUSED)
-        (asserts! (> price u0) ERR-INVALID-PRICE)
+        ;; Enhanced validation checks
+        (try! (validate-security-checks tx-sender "create-listing"))
+        (try! (validate-marketplace-not-paused))
+        (try! (validate-token-id token-id))
+        (try! (validate-price price))
         (asserts! (> expiry-blocks u0) ERR-INVALID-EXPIRY)
+        (asserts! (<= expiry-blocks u52560) ERR-INVALID-EXPIRY) ;; Max 1 year
         (asserts! (<= price (var-get max-listing-price)) ERR-LISTING-PRICE-TOO-HIGH)
         (asserts! (>= price (var-get min-listing-price)) ERR-LISTING-PRICE-TOO-LOW)
+        
+        ;; Validate token ownership
+        (try! (validate-token-owner token-id tx-sender))
+        
+        ;; Check if token is already listed
+        (asserts! (is-none (get-existing-listing token-id)) ERR-ALREADY-EXISTS)
+        
         (match (map-get? token-owners { token-id: token-id })
             owner-data (let ((owner (get owner owner-data)))
-                (if (not (is-eq owner tx-sender))
-                    ERR-NOT-OWNER
-                    (let (
-                        (listing-id (var-get next-listing-id))
-                        (current-block stacks-block-height)
-                        (expiry-block (+ current-block expiry-blocks))
-                    )
-                        (begin
-                            ;; Create listing
-                            (map-set marketplace-listings { listing-id: listing-id } {
-                                token-id: token-id,
-                                seller: tx-sender,
-                                price: price,
-                                reserve-price: none,
-                                expiry-block: (some expiry-block),
-                                listing-type: "fixed",
-                                created-at: current-block,
-                                updated-at: current-block,
-                                active: true,
-                                view-count: u0
+                (let (
+                    (listing-id (var-get next-listing-id))
+                    (current-block stacks-block-height)
+                    (expiry-block (+ current-block expiry-blocks))
+                )
+                    (begin
+                        ;; Create listing
+                        (map-set marketplace-listings { listing-id: listing-id } {
+                            token-id: token-id,
+                            seller: tx-sender,
+                            price: price,
+                            reserve-price: none,
+                            expiry-block: (some expiry-block),
+                            listing-type: "fixed",
+                            created-at: current-block,
+                            updated-at: current-block,
+                            active: true,
+                            view-count: u0
+                        })
+                        ;; Track seller listings
+                        (let ((seller-row (default-to { listing-ids: (list) } (map-get? seller-listings { seller: tx-sender }))))
+                            (map-set seller-listings { seller: tx-sender } {
+                                listing-ids: (unwrap-panic (as-max-len? (append (get listing-ids seller-row) listing-id) u100))
                             })
-                            ;; Track seller listings
-                            (let ((seller-row (default-to { listing-ids: (list) } (map-get? seller-listings { seller: tx-sender }))))
-                                (map-set seller-listings { seller: tx-sender } {
-                                    listing-ids: (unwrap-panic (as-max-len? (append (get listing-ids seller-row) listing-id) u100))
-                                })
-                            )
-                            ;; Increment counters
-                            (var-set listing-count (+ (var-get listing-count) u1))
-                            (var-set next-listing-id (+ listing-id u1))
-                            ;; Emit event
-                            (print (tuple
-                                (event "listing-created")
-                                (listing-id listing-id)
-                                (token-id token-id)
-                                (seller tx-sender)
-                                (price price)
-                                (expiry-block expiry-block)
-                            ))
-                            (ok listing-id)
                         )
+                        ;; Increment counters
+                        (var-set listing-count (+ (var-get listing-count) u1))
+                        (var-set next-listing-id (+ listing-id u1))
+                        ;; Emit enhanced event
+                        (emit-marketplace-event
+                            EVENT-LISTING-CREATED
+                            (some listing-id)
+                            (some token-id)
+                            tx-sender
+                            (tuple (price (some price)) (seller (some tx-sender)) (buyer none) (fee none))
+                        )
+                        (ok listing-id)
                     )
                 )
             )
@@ -976,77 +983,144 @@
     )
 )
 
-;; Public: purchase a marketplace listing
+;; Check if token already has an active listing
+(define-private (get-existing-listing (token-id uint))
+    (let (
+        (max-listing-id (var-get next-listing-id))
+    )
+        (check-token-listings token-id u1 max-listing-id)
+    )
+)
+
+;; Check if token has active listings (simplified check)
+(define-private (check-token-listings (token-id uint) (start-id uint) (end-id uint))
+    (let (
+        (listing-1 (check-single-listing token-id start-id))
+        (listing-2 (check-single-listing token-id (+ start-id u1)))
+        (listing-3 (check-single-listing token-id (+ start-id u2)))
+    )
+        (if (is-some listing-1)
+            listing-1
+            (if (is-some listing-2)
+                listing-2
+                listing-3
+            )
+        )
+    )
+)
+
+;; Check single listing for token
+(define-private (check-single-listing (token-id uint) (listing-id uint))
+    (match (map-get? marketplace-listings { listing-id: listing-id })
+        listing-data (if (and 
+            (is-eq (get token-id listing-data) token-id)
+            (get active listing-data)
+        )
+            (some listing-id)
+            none
+        )
+        none
+    )
+)
+
+;; Public: purchase a marketplace listing with enhanced validation
 ;; Buyer sends STX, seller receives STX minus fees
-;; Listing must be active
+;; Listing must be active and not expired
 ;; Token ownership transfers to buyer
 (define-public (purchase-listing (listing-id uint))
     (begin
-        (asserts! (not (var-get marketplace-paused)) ERR-PAUSED)
+        ;; Enhanced validation checks
+        (try! (validate-security-checks tx-sender "purchase"))
+        (try! (validate-marketplace-not-paused))
+        (asserts! (> listing-id u0) ERR-INVALID-TOKEN-ID)
+        
         (match (map-get? marketplace-listings { listing-id: listing-id })
             listing-data (let (
                 (token-id (get token-id listing-data))
                 (seller (get seller listing-data))
                 (price (get price listing-data))
                 (is-active (get active listing-data))
+                (expiry-block (get expiry-block listing-data))
             )
-                (if (not is-active)
-                    ERR-LISTING-NOT-FOUND
-                    (if (is-eq seller tx-sender)
-                        ERR-SELF-TRANSFER
-                        (let (
-                            (fee-amount (/ (* price (var-get marketplace-fee-percent)) u100))
-                            (seller-amount (- price fee-amount))
-                        )
-                            (begin
-                                ;; Transfer token to buyer
-                                (map-set token-owners { token-id: token-id } { owner: tx-sender })
-                                ;; Mark listing as inactive
-                                (map-set marketplace-listings { listing-id: listing-id } {
-                                    token-id: token-id,
-                                    seller: seller,
-                                    price: price,
-                                    reserve-price: (get reserve-price listing-data),
-                                    expiry-block: (get expiry-block listing-data),
-                                    listing-type: (get listing-type listing-data),
-                                    created-at: (get created-at listing-data),
-                                    updated-at: stacks-block-height,
-                                    active: false,
-                                    view-count: (get view-count listing-data)
-                                })
-                                ;; Record purchase
-                                (map-set purchase-history { buyer: tx-sender, listing-id: listing-id } {
-                                    purchase-price: price,
-                                    purchased-at: stacks-block-height,
-                                    seller: seller
-                                })
-                                ;; Update counters
-                                (var-set listing-count (if (> (var-get listing-count) u0)
-                                    (- (var-get listing-count) u1)
-                                    u0
-                                ))
-                                (var-set transaction-count (+ (var-get transaction-count) u1))
-                                (var-set total-fees-collected (+ (var-get total-fees-collected) fee-amount))
-                                ;; Track buyer if new
-                                (if (is-none (map-get? user-registry { user: tx-sender }))
-                                    (begin
-                                        (map-set user-registry { user: tx-sender } { active: true })
-                                        (var-set user-count (+ (var-get user-count) u1))
-                                    )
-                                    true
+                (begin
+                    ;; Comprehensive validation
+                    (asserts! is-active ERR-LISTING-INACTIVE)
+                    (asserts! (not (is-eq seller tx-sender)) ERR-SELF-TRANSFER)
+                    
+                    ;; Check expiry
+                    (try! (match expiry-block
+                        expiry (if (< stacks-block-height expiry) (ok true) ERR-LISTING-EXPIRED)
+                        (ok true)
+                    ))
+                    
+                    ;; Validate token still exists and is owned by seller
+                    (try! (match (map-get? token-owners { token-id: token-id })
+                        owner-data (if (is-eq (get owner owner-data) seller) (ok true) ERR-NOT-OWNER)
+                        ERR-NOT-FOUND
+                    ))
+                    
+                    ;; Check buyer is not blacklisted
+                    (try! (check-blacklist tx-sender))
+                    
+                    (let (
+                        (fee-amount (/ (* price (var-get marketplace-fee-percent)) u100))
+                        (seller-amount (- price fee-amount))
+                    )
+                        (begin
+                            ;; Validate fee calculation
+                            (asserts! (>= price fee-amount) ERR-INTERNAL-ERROR)
+                            
+                            ;; Transfer token to buyer
+                            (map-set token-owners { token-id: token-id } { owner: tx-sender })
+                            
+                            ;; Mark listing as inactive
+                            (map-set marketplace-listings { listing-id: listing-id } {
+                                token-id: token-id,
+                                seller: seller,
+                                price: price,
+                                reserve-price: (get reserve-price listing-data),
+                                expiry-block: (get expiry-block listing-data),
+                                listing-type: (get listing-type listing-data),
+                                created-at: (get created-at listing-data),
+                                updated-at: stacks-block-height,
+                                active: false,
+                                view-count: (get view-count listing-data)
+                            })
+                            
+                            ;; Record purchase
+                            (map-set purchase-history { buyer: tx-sender, listing-id: listing-id } {
+                                purchase-price: price,
+                                purchased-at: stacks-block-height,
+                                seller: seller
+                            })
+                            
+                            ;; Update counters safely
+                            (var-set listing-count (if (> (var-get listing-count) u0)
+                                (- (var-get listing-count) u1)
+                                u0
+                            ))
+                            (var-set transaction-count (+ (var-get transaction-count) u1))
+                            (var-set total-fees-collected (+ (var-get total-fees-collected) fee-amount))
+                            
+                            ;; Track buyer if new
+                            (if (is-none (map-get? user-registry { user: tx-sender }))
+                                (begin
+                                    (map-set user-registry { user: tx-sender } { active: true })
+                                    (var-set user-count (+ (var-get user-count) u1))
                                 )
-                                ;; Emit purchase event
-                                (print (tuple
-                                    (event "purchase-completed")
-                                    (listing-id listing-id)
-                                    (token-id token-id)
-                                    (buyer tx-sender)
-                                    (seller seller)
-                                    (price price)
-                                    (fee-amount fee-amount)
-                                ))
-                                (ok true)
+                                true
                             )
+                            
+                            ;; Emit enhanced purchase event
+                            (emit-marketplace-event
+                                EVENT-PURCHASE-COMPLETED
+                                (some listing-id)
+                                (some token-id)
+                                tx-sender
+                                (tuple (price (some price)) (seller (some seller)) (buyer (some tx-sender)) (fee (some fee-amount)))
+                            )
+                            
+                            (ok true)
                         )
                     )
                 )
@@ -1056,8 +1130,91 @@
     )
 )
 
-;; private functions
-;; - Internal helpers for validating tiers and managing counters/maps.
+;; Enhanced validation helper functions
+
+;; Validate batch size limits
+(define-private (validate-batch-size (size uint) (max-size uint))
+    (if (<= size max-size)
+        (ok true)
+        ERR-MAX-BATCH-SIZE
+    )
+)
+
+;; Validate expiry time is reasonable
+(define-private (validate-expiry-time (expiry-blocks uint))
+    (if (and (> expiry-blocks u0) (<= expiry-blocks u52560)) ;; Max 1 year
+        (ok true)
+        ERR-INVALID-EXPIRY
+    )
+)
+
+;; Validate string length
+(define-private (validate-string-length (str (string-utf8 256)) (max-len uint))
+    (if (<= (len str) max-len)
+        (ok true)
+        ERR-INVALID-URI
+    )
+)
+
+;; Validate amount is within reasonable bounds
+(define-private (validate-amount-bounds (amount uint) (min-amount uint) (max-amount uint))
+    (if (and (>= amount min-amount) (<= amount max-amount))
+        (ok true)
+        ERR-INVALID-AMOUNT
+    )
+)
+
+;; Check resource limits before operations
+(define-private (validate-resource-limits)
+    (let (
+        (current-supply (var-get total-supply))
+        (current-listings (var-get listing-count))
+        (current-users (var-get user-count))
+    )
+        (begin
+            (asserts! (< current-supply MAX-SUPPLY) ERR-MAX-SUPPLY)
+            (asserts! (< current-listings u10000) ERR-MAX-LISTINGS) ;; Reasonable listing limit
+            (asserts! (< current-users u100000) ERR-STORAGE-LIMIT) ;; Reasonable user limit
+            (ok true)
+        )
+    )
+)
+
+;; Validate business rules for marketplace operations
+(define-private (validate-marketplace-business-rules (token-id uint) (price uint))
+    (begin
+        ;; Check token exists
+        (asserts! (is-some (map-get? token-owners { token-id: token-id })) ERR-NOT-FOUND)
+        
+        ;; Check price is reasonable
+        (try! (validate-amount-bounds price (var-get min-listing-price) (var-get max-listing-price)))
+        
+        ;; Check resource limits
+        (try! (validate-resource-limits))
+        
+        (ok true)
+    )
+)
+
+;; Enhanced authorization checks
+(define-private (validate-enhanced-authorization (caller principal) (operation (string-ascii 32)))
+    (begin
+        ;; Check blacklist
+        (try! (check-blacklist caller))
+        
+        ;; Check rate limits
+        (try! (check-rate-limit caller operation))
+        
+        ;; Check emergency mode
+        (asserts! (not (var-get emergency-mode)) ERR-MAINTENANCE-MODE)
+        
+        ;; Check operation-specific permissions
+        (if (is-eq operation "admin")
+            (validate-admin caller)
+            (ok true)
+        )
+    )
+)
 
 ;; Returns true if the given tier is one of the known tiers.
 (define-private (is-valid-tier (tier uint))
