@@ -1240,17 +1240,76 @@
 
 ;; Emergency functions for contract recovery
 
-;; Emergency pause (can be called by owner in critical situations)
+;; Enhanced emergency pause with security logging
 (define-public (emergency-pause (reason (string-utf8 256)))
-    (begin
+    (let (
+        (was-paused (var-get contract-paused))
+        (current-supply (var-get total-supply))
+        (contract-balance (stx-get-balance (as-contract tx-sender)))
+    )
+        ;; Enhanced security validation
         (asserts! (is-owner tx-sender) ERR-UNAUTHORIZED)
-        (var-set contract-paused true)
+        (asserts! (validate-utf8-length reason u256) ERR-INVALID-STRING-LENGTH)
+        (asserts! (> (len reason) u0) ERR-INVALID-METADATA)
         
+        ;; Set emergency pause
+        (var-set contract-paused true)
+        (var-set minting-enabled false)
+        
+        ;; Comprehensive emergency event with security context
         (print {
-            event: "emergency-pause",
+            event: "emergency-pause-activated",
             reason: reason,
             paused-by: tx-sender,
+            security-context: {
+                was-already-paused: was-paused,
+                current-supply: current-supply,
+                contract-balance: contract-balance,
+                total-royalties: (var-get total-royalties-collected),
+                emergency-level: "critical"
+            },
+            timestamp: block-height,
+            block-height: block-height,
+            requires-investigation: true
+        })
+        
+        ;; Log security event
+        (print {
+            event: "security-alert",
+            alert-type: "emergency-pause",
+            severity: "high",
+            operator: tx-sender,
+            reason: reason,
             timestamp: block-height
+        })
+        
+        (ok true)
+    )
+)
+
+;; Add emergency recovery function
+(define-public (emergency-recover (new-owner principal) (reason (string-utf8 256)))
+    (let (
+        (old-owner (var-get contract-owner))
+    )
+        ;; Only current owner can initiate recovery
+        (asserts! (is-owner tx-sender) ERR-UNAUTHORIZED)
+        (asserts! (not (is-eq new-owner tx-sender)) ERR-SELF-TRANSFER)
+        (asserts! (not (is-zero-address new-owner)) ERR-ZERO-ADDRESS)
+        (asserts! (validate-utf8-length reason u256) ERR-INVALID-STRING-LENGTH)
+        
+        ;; Transfer ownership
+        (var-set contract-owner new-owner)
+        
+        ;; Log emergency recovery
+        (print {
+            event: "emergency-recovery",
+            old-owner: old-owner,
+            new-owner: new-owner,
+            reason: reason,
+            initiated-by: tx-sender,
+            timestamp: block-height,
+            requires-audit: true
         })
         
         (ok true)
