@@ -1347,3 +1347,108 @@ describe("Bitdap Multi Token - Performance and Stress Tests", () => {
     });
   });
 });
+describe("Bitdap Multi Token - Integration Tests", () => {
+  it("should handle complete token lifecycle", () => {
+    // 1. Create token
+    const { result: createResult } = simnet.callPublicFn(
+      contractName,
+      "create-token",
+      [
+        Cl.stringUtf8("Lifecycle Token"),
+        Cl.stringUtf8("LIFE"),
+        Cl.uint(18),
+        Cl.bool(true),
+        Cl.some(Cl.stringUtf8("https://example.com/lifecycle"))
+      ],
+      deployer
+    );
+    expect(createResult).toBeOk(Cl.uint(1));
+
+    // 2. Mint tokens
+    const { result: mintResult } = simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(wallet1), Cl.uint(1), Cl.uint(10000)],
+      deployer
+    );
+    expect(mintResult).toBeOk(Cl.bool(true));
+
+    // 3. Set approval
+    const { result: approvalResult } = simnet.callPublicFn(
+      contractName,
+      "set-approval-for-all",
+      [Cl.principal(wallet2), Cl.bool(true)],
+      wallet1
+    );
+    expect(approvalResult).toBeOk(Cl.bool(true));
+
+    // 4. Transfer tokens
+    const { result: transferResult } = simnet.callPublicFn(
+      contractName,
+      "transfer-from",
+      [Cl.principal(wallet1), Cl.principal(wallet3), Cl.uint(1), Cl.uint(3000)],
+      wallet1
+    );
+    expect(transferResult).toBeOk(Cl.bool(true));
+
+    // 5. Burn tokens (by approved operator)
+    const { result: burnResult } = simnet.callPublicFn(
+      contractName,
+      "burn",
+      [Cl.principal(wallet1), Cl.uint(1), Cl.uint(2000)],
+      wallet2
+    );
+    expect(burnResult).toBeOk(Cl.bool(true));
+
+    // 6. Update token metadata
+    const { result: updateResult } = simnet.callPublicFn(
+      contractName,
+      "update-token-info",
+      [Cl.uint(1), Cl.stringUtf8("Updated Lifecycle Token"), Cl.stringUtf8("UPLIFE")],
+      deployer
+    );
+    expect(updateResult).toBeOk(Cl.bool(true));
+
+    // 7. Verify final state
+    const finalBalance1 = simnet.callReadOnlyFn(
+      contractName,
+      "get-balance",
+      [Cl.principal(wallet1), Cl.uint(1)],
+      deployer
+    );
+    expect(finalBalance1.result).toBeOk(Cl.uint(5000)); // 10000 - 3000 - 2000
+
+    const finalBalance3 = simnet.callReadOnlyFn(
+      contractName,
+      "get-balance",
+      [Cl.principal(wallet3), Cl.uint(1)],
+      deployer
+    );
+    expect(finalBalance3.result).toBeOk(Cl.uint(3000));
+
+    const finalSupply = simnet.callReadOnlyFn(
+      contractName,
+      "get-total-supply",
+      [Cl.uint(1)],
+      deployer
+    );
+    expect(finalSupply.result).toBeOk(Cl.uint(8000)); // 10000 - 2000 burned
+
+    const updatedMetadata = simnet.callReadOnlyFn(
+      contractName,
+      "get-token-metadata",
+      [Cl.uint(1)],
+      deployer
+    );
+    expect(updatedMetadata.result).toBeOk(
+      Cl.tuple({
+        name: Cl.stringUtf8("Updated Lifecycle Token"),
+        symbol: Cl.stringUtf8("UPLIFE"),
+        decimals: Cl.uint(18),
+        "total-supply": Cl.uint(8000),
+        "is-fungible": Cl.bool(true),
+        uri: Cl.some(Cl.stringUtf8("https://example.com/lifecycle"))
+      })
+    );
+  });
+});
