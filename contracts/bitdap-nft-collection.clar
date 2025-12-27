@@ -1,11 +1,11 @@
 ;; title: Bitdap NFT Collection
-;; version: 1.0.0
-;; summary: General-purpose NFT collection contract for the Bitdap ecosystem
+;; version: 2.1.0
+;; summary: Enhanced NFT collection contract with improved error handling and events
 ;; description: >
 ;;   Bitdap NFT Collection is a comprehensive, SIP-009 compliant smart contract
 ;;   that enables the creation and management of NFT collections on the Stacks blockchain.
-;;   This contract provides a flexible framework for deploying custom NFT collections
-;;   with configurable parameters, royalty support, and administrative controls.
+;;   This enhanced version includes improved error handling, detailed event logging,
+;;   gas optimizations, and comprehensive security features.
 
 ;; SIP-009 trait implementation
 (impl-trait 'SP2PABAF9FTAJYNFZH93XENAJ8FVY99RRM50D2JG9.nft-trait.nft-trait)
@@ -1182,15 +1182,51 @@
     )
 )
 
-;; Get contract version and info
+;; Enhanced contract info with health check
 (define-read-only (get-contract-info)
     (ok {
-        version: "2.0.0",
+        version: "2.1.0",
         name: "Bitdap NFT Collection",
-        description: "Enhanced NFT collection contract with approvals, events, and batch operations",
+        description: "Enhanced NFT collection contract with improved error handling, detailed events, and security features",
         sip-009-compliant: true,
-        features: (list "minting" "burning" "transfers" "approvals" "royalties" "batch-operations" "pause-controls" "enhanced-events" "fund-management")
+        features: (list "minting" "burning" "transfers" "approvals" "royalties" "batch-operations" "pause-controls" "enhanced-events" "fund-management" "error-logging" "gas-optimization" "security-enhancements"),
+        enhancements: (list "detailed-error-codes" "comprehensive-validation" "optimized-batch-ops" "security-logging" "emergency-recovery"),
+        last-updated: block-height
     })
+)
+
+;; Comprehensive contract health check
+(define-read-only (get-contract-health)
+    (let (
+        (current-supply (var-get total-supply))
+        (max-supply-limit (var-get max-supply))
+        (contract-balance (stx-get-balance (as-contract tx-sender)))
+        (is-paused (var-get contract-paused))
+        (minting-enabled (var-get minting-enabled))
+    )
+        (ok {
+            status: (if is-paused "paused" (if minting-enabled "active" "minting-disabled")),
+            supply-health: {
+                current: current-supply,
+                max: max-supply-limit,
+                utilization-percent: (if (> max-supply-limit u0) (/ (* current-supply u100) max-supply-limit) u0),
+                remaining: (- max-supply-limit current-supply)
+            },
+            financial-health: {
+                contract-balance: contract-balance,
+                mint-price: (var-get mint-price),
+                royalties-collected: (var-get total-royalties-collected)
+            },
+            operational-health: {
+                paused: is-paused,
+                minting-enabled: minting-enabled,
+                owner: (var-get contract-owner),
+                initialized: (var-get initialized)
+            },
+            last-check: block-height,
+            health-score: (if (and (not is-paused) minting-enabled (< current-supply max-supply-limit)) "healthy" "attention-needed")
+        })
+    )
 )
 
 ;; Advanced error handling and validation functions
