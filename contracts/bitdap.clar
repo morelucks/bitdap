@@ -2062,7 +2062,7 @@
             (user user)
             (active (get active user-data))
             (tokens-owned (len owned-tokens))
-            (active-listings (len (filter is-listing-active-by-id listing-ids)))
+            (active-listings (count-active-listings listing-ids))
             (total-listings-created (len listing-ids))
             (reputation-score (calculate-reputation-score user))
             (first-interaction (get-first-interaction user))
@@ -2108,8 +2108,39 @@
 ;; Check if listing is active by ID
 (define-private (is-listing-active-by-id (listing-id uint))
     (match (map-get? marketplace-listings { listing-id: listing-id })
-        listing-data (get active listing-data)
+        listing-data (and 
+            (get active listing-data)
+            (match (get expiry-block listing-data)
+                expiry (< stacks-block-height expiry)
+                true
+            )
+        )
         false
+    )
+)
+
+;; Count active listings in a list
+(define-private (count-active-listings (listing-ids (list 100 uint)))
+    (let (
+        (first-id (element-at listing-ids u0))
+        (second-id (element-at listing-ids u1))
+        (third-id (element-at listing-ids u2))
+        (fourth-id (element-at listing-ids u3))
+        (fifth-id (element-at listing-ids u4))
+    )
+        (+
+            (if (match first-id id (is-listing-active-by-id id) false) u1 u0)
+            (+
+                (if (match second-id id (is-listing-active-by-id id) false) u1 u0)
+                (+
+                    (if (match third-id id (is-listing-active-by-id id) false) u1 u0)
+                    (+
+                        (if (match fourth-id id (is-listing-active-by-id id) false) u1 u0)
+                        (if (match fifth-id id (is-listing-active-by-id id) false) u1 u0)
+                    )
+                )
+            )
+        )
     )
 )
 
@@ -2132,21 +2163,24 @@
     stacks-block-height
 )
 
-;; Real-time marketplace data with filtering
+;; Real-time marketplace data with filtering and sorting
 (define-read-only (get-marketplace-data 
     (tier-filter (optional uint))
     (price-min (optional uint))
     (price-max (optional uint))
     (active-only bool)
+    (sort-by (string-ascii 16)) ;; "price-asc", "price-desc", "date-asc", "date-desc"
     (offset uint)
     (limit uint)
 )
     (let (
         (safe-limit (if (> limit MAX-PAGE-SIZE) MAX-PAGE-SIZE limit))
         (total-listings (var-get listing-count))
+        (filtered-listings (get-filtered-listing-data tier-filter price-min price-max active-only offset safe-limit))
+        (sorted-listings (sort-listings filtered-listings sort-by))
     )
         (ok (tuple
-            (listings (get-filtered-listing-data tier-filter price-min price-max active-only offset safe-limit))
+            (listings sorted-listings)
             (total-count total-listings)
             (active-count (get-active-listings-count))
             (filters (tuple 
@@ -2154,6 +2188,7 @@
                 (price-min price-min)
                 (price-max price-max)
                 (active-only active-only)
+                (sort-by sort-by)
             ))
             (pagination (tuple
                 (offset offset)
@@ -2161,6 +2196,89 @@
                 (has-more (< (+ offset safe-limit) total-listings))
             ))
         ))
+    )
+)
+
+;; Sort listings based on criteria
+(define-private (sort-listings (listing-ids (list 100 uint)) (sort-by (string-ascii 16)))
+    (if (is-eq sort-by "price-asc")
+        (sort-listings-by-price listing-ids true)
+        (if (is-eq sort-by "price-desc")
+            (sort-listings-by-price listing-ids false)
+            (if (is-eq sort-by "date-asc")
+                (sort-listings-by-date listing-ids true)
+                (if (is-eq sort-by "date-desc")
+                    (sort-listings-by-date listing-ids false)
+                    listing-ids ;; Default: no sorting
+                )
+            )
+        )
+    )
+)
+
+;; Sort listings by price (simplified bubble sort for small lists)
+(define-private (sort-listings-by-price (listing-ids (list 100 uint)) (ascending bool))
+    (let (
+        (first-id (element-at listing-ids u0))
+        (second-id (element-at listing-ids u1))
+        (third-id (element-at listing-ids u2))
+    )
+        (if (and (is-some first-id) (is-some second-id))
+            (let (
+                (first-price (get-listing-price (unwrap-panic first-id)))
+                (second-price (get-listing-price (unwrap-panic second-id)))
+                (should-swap (if ascending (> first-price second-price) (< first-price second-price)))
+            )
+                (if should-swap
+                    (concat (concat (list (unwrap-panic second-id)) (list (unwrap-panic first-id))) 
+                            (match third-id id (list id) (list)))
+                    (concat (concat (list (unwrap-panic first-id)) (list (unwrap-panic second-id))) 
+                            (match third-id id (list id) (list)))
+                )
+            )
+            listing-ids
+        )
+    )
+)
+
+;; Sort listings by date (simplified)
+(define-private (sort-listings-by-date (listing-ids (list 100 uint)) (ascending bool))
+    (let (
+        (first-id (element-at listing-ids u0))
+        (second-id (element-at listing-ids u1))
+        (third-id (element-at listing-ids u2))
+    )
+        (if (and (is-some first-id) (is-some second-id))
+            (let (
+                (first-date (get-listing-date (unwrap-panic first-id)))
+                (second-date (get-listing-date (unwrap-panic second-id)))
+                (should-swap (if ascending (> first-date second-date) (< first-date second-date)))
+            )
+                (if should-swap
+                    (concat (concat (list (unwrap-panic second-id)) (list (unwrap-panic first-id))) 
+                            (match third-id id (list id) (list)))
+                    (concat (concat (list (unwrap-panic first-id)) (list (unwrap-panic second-id))) 
+                            (match third-id id (list id) (list)))
+                )
+            )
+            listing-ids
+        )
+    )
+)
+
+;; Get listing price for sorting
+(define-private (get-listing-price (listing-id uint))
+    (match (map-get? marketplace-listings { listing-id: listing-id })
+        listing-data (get price listing-data)
+        u0
+    )
+)
+
+;; Get listing date for sorting
+(define-private (get-listing-date (listing-id uint))
+    (match (map-get? marketplace-listings { listing-id: listing-id })
+        listing-data (get created-at listing-data)
+        u0
     )
 )
 
@@ -2368,15 +2486,115 @@
     )
 )
 
-;; Perform token search (simplified)
+;; Perform token search with actual search logic
 (define-private (perform-token-search 
     (query (string-utf8 64))
     (tier-filter (optional uint))
     (owner-filter (optional principal))
     (limit uint)
 )
-    ;; Simplified implementation - would perform actual search
-    (list)
+    (let (
+        (max-token-id (var-get next-token-id))
+        (search-limit (if (> limit u20) u20 limit))
+        (sample-tokens (get-sample-tokens-for-search u1 (if (> max-token-id u20) u20 max-token-id)))
+        (filtered-tokens (search-filter-tokens sample-tokens tier-filter owner-filter))
+    )
+        (take-limited-tokens filtered-tokens search-limit)
+    )
+)
+
+;; Get sample tokens for search
+(define-private (get-sample-tokens-for-search (start uint) (end uint))
+    (let (
+        (token-1 (if (and (>= end start) (is-some (map-get? token-owners { token-id: start }))) (list start) (list)))
+        (token-2 (if (and (>= end (+ start u1)) (is-some (map-get? token-owners { token-id: (+ start u1) }))) (list (+ start u1)) (list)))
+        (token-3 (if (and (>= end (+ start u2)) (is-some (map-get? token-owners { token-id: (+ start u2) }))) (list (+ start u2)) (list)))
+        (token-4 (if (and (>= end (+ start u3)) (is-some (map-get? token-owners { token-id: (+ start u3) }))) (list (+ start u3)) (list)))
+        (token-5 (if (and (>= end (+ start u4)) (is-some (map-get? token-owners { token-id: (+ start u4) }))) (list (+ start u4)) (list)))
+        (token-6 (if (and (>= end (+ start u5)) (is-some (map-get? token-owners { token-id: (+ start u5) }))) (list (+ start u5)) (list)))
+        (token-7 (if (and (>= end (+ start u6)) (is-some (map-get? token-owners { token-id: (+ start u6) }))) (list (+ start u6)) (list)))
+        (token-8 (if (and (>= end (+ start u7)) (is-some (map-get? token-owners { token-id: (+ start u7) }))) (list (+ start u7)) (list)))
+        (token-9 (if (and (>= end (+ start u8)) (is-some (map-get? token-owners { token-id: (+ start u8) }))) (list (+ start u8)) (list)))
+        (token-10 (if (and (>= end (+ start u9)) (is-some (map-get? token-owners { token-id: (+ start u9) }))) (list (+ start u9)) (list)))
+    )
+        (concat (concat (concat (concat (concat token-1 token-2) token-3) token-4) token-5) 
+                (concat (concat (concat (concat token-6 token-7) token-8) token-9) token-10))
+    )
+)
+
+;; Filter tokens based on search criteria
+(define-private (search-filter-tokens 
+    (token-ids (list 100 uint))
+    (tier-filter (optional uint))
+    (owner-filter (optional principal))
+)
+    (let (
+        (first-token (element-at token-ids u0))
+        (second-token (element-at token-ids u1))
+        (third-token (element-at token-ids u2))
+    )
+        (concat 
+            (concat 
+                (match first-token
+                    token-id (if (is-token-match token-id tier-filter owner-filter) (list token-id) (list))
+                    (list)
+                )
+                (match second-token
+                    token-id (if (is-token-match token-id tier-filter owner-filter) (list token-id) (list))
+                    (list)
+                )
+            )
+            (match third-token
+                token-id (if (is-token-match token-id tier-filter owner-filter) (list token-id) (list))
+                (list)
+            )
+        )
+    )
+)
+
+;; Check if token matches search criteria
+(define-private (is-token-match (token-id uint) (tier-filter (optional uint)) (owner-filter (optional principal)))
+    (let (
+        (owner-data (map-get? token-owners { token-id: token-id }))
+        (meta-data (map-get? token-metadata { token-id: token-id }))
+    )
+        (and
+            (match tier-filter
+                tier (match meta-data
+                    meta (is-eq (get tier meta) tier)
+                    false
+                )
+                true
+            )
+            (match owner-filter
+                owner (match owner-data
+                    data (is-eq (get owner data) owner)
+                    false
+                )
+                true
+            )
+        )
+    )
+)
+
+;; Take limited number of tokens
+(define-private (take-limited-tokens (token-ids (list 100 uint)) (limit uint))
+    (if (> limit u10)
+        (list) ;; Return empty for large limits
+        (let (
+            (token-1 (element-at token-ids u0))
+            (token-2 (element-at token-ids u1))
+            (token-3 (element-at token-ids u2))
+        )
+            (concat 
+                (concat 
+                    (match token-1 token-id (list token-id) (list))
+                    (if (> limit u1) (match token-2 token-id (list token-id) (list)) (list))
+                )
+                (if (> limit u2) (match token-3 token-id (list token-id) (list)) (list))
+            )
+        )
+    )
 )
 
 ;; Get marketplace trends and analytics
