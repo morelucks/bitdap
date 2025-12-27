@@ -234,22 +234,28 @@
         (per-address-limit-value (var-get per-address-limit))
         (mint-price-value (var-get mint-price))
     )
-        ;; Validate contract state
+        ;; Enhanced validation with detailed error context
         (asserts! (not (var-get contract-paused)) ERR-CONTRACT-PAUSED)
-        (asserts! (var-get minting-enabled) ERR-CONTRACT-PAUSED)
-        
-        ;; Validate supply limits
-        (asserts! (< current-supply max-supply-limit) ERR-MAX-SUPPLY-REACHED)
-        
-        ;; Validate per-address minting limit
-        (asserts! (< recipient-mint-count per-address-limit-value) ERR-MINT-LIMIT-EXCEEDED)
-        
-        ;; Validate recipient
+        (asserts! (var-get minting-enabled) ERR-MINTING-DISABLED)
+        (asserts! (not (is-zero-address recipient)) ERR-ZERO-ADDRESS)
         (asserts! (not (is-eq recipient (as-contract tx-sender))) ERR-INVALID-RECIPIENT)
         
-        ;; Validate payment if mint price is set
+        ;; Validate URI if provided
+        (match uri
+            some-uri (asserts! (validate-utf8-length some-uri u256) ERR-INVALID-METADATA)
+            true
+        )
+        
+        ;; Validate supply limits with detailed context
+        (asserts! (< current-supply max-supply-limit) ERR-MAX-SUPPLY-REACHED)
+        (asserts! (< recipient-mint-count per-address-limit-value) ERR-MINT-LIMIT-EXCEEDED)
+        
+        ;; Enhanced payment validation
         (if (> mint-price-value u0)
-            (try! (stx-transfer? mint-price-value tx-sender (as-contract tx-sender)))
+            (begin
+                (asserts! (>= (stx-get-balance tx-sender) mint-price-value) ERR-INSUFFICIENT-PAYMENT)
+                (try! (stx-transfer? mint-price-value tx-sender (as-contract tx-sender)))
+            )
             true
         )
         
@@ -263,15 +269,19 @@
         (var-set total-supply (+ current-supply u1))
         (increment-mint-count recipient)
         
-        ;; Emit mint event
+        ;; Enhanced mint event with more context
         (print {
-            event: "mint",
+            event: "mint-success",
             token-id: token-id,
             recipient: recipient,
             uri: uri,
             minter: tx-sender,
             price-paid: mint-price-value,
-            timestamp: block-height
+            total-supply: (+ current-supply u1),
+            remaining-supply: (- max-supply-limit (+ current-supply u1)),
+            recipient-mint-count: (+ recipient-mint-count u1),
+            timestamp: block-height,
+            block-height: block-height
         })
         
         ;; Return token ID
