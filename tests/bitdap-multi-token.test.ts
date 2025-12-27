@@ -1452,3 +1452,110 @@ describe("Bitdap Multi Token - Integration Tests", () => {
     );
   });
 });
+describe("Bitdap Multi Token - Security and Authorization Tests", () => {
+  beforeEach(() => {
+    // Setup security test scenario
+    simnet.callPublicFn(
+      contractName,
+      "create-token",
+      [
+        Cl.stringUtf8("Security Token"),
+        Cl.stringUtf8("SEC"),
+        Cl.uint(18),
+        Cl.bool(true),
+        Cl.none()
+      ],
+      deployer
+    );
+    simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(wallet1), Cl.uint(1), Cl.uint(5000)],
+      deployer
+    );
+  });
+
+  it("should enforce strict authorization for owner-only functions", () => {
+    // Non-owner cannot create tokens
+    const { result: createResult } = simnet.callPublicFn(
+      contractName,
+      "create-token",
+      [
+        Cl.stringUtf8("Unauthorized Token"),
+        Cl.stringUtf8("UNAUTH"),
+        Cl.uint(18),
+        Cl.bool(true),
+        Cl.none()
+      ],
+      wallet1
+    );
+    expect(createResult).toBeErr(Cl.uint(401)); // ERR-UNAUTHORIZED
+
+    // Non-owner cannot mint
+    const { result: mintResult } = simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(wallet2), Cl.uint(1), Cl.uint(1000)],
+      wallet1
+    );
+    expect(mintResult).toBeErr(Cl.uint(401)); // ERR-UNAUTHORIZED
+
+    // Non-owner cannot update token info
+    const { result: updateResult } = simnet.callPublicFn(
+      contractName,
+      "update-token-info",
+      [Cl.uint(1), Cl.stringUtf8("Hacked Token"), Cl.stringUtf8("HACK")],
+      wallet1
+    );
+    expect(updateResult).toBeErr(Cl.uint(401)); // ERR-UNAUTHORIZED
+
+    // Non-owner cannot set token URI
+    const { result: uriResult } = simnet.callPublicFn(
+      contractName,
+      "set-token-uri",
+      [Cl.uint(1), Cl.some(Cl.stringUtf8("https://malicious.com"))],
+      wallet1
+    );
+    expect(uriResult).toBeErr(Cl.uint(401)); // ERR-UNAUTHORIZED
+  });
+
+  it("should prevent unauthorized token operations", () => {
+    // Cannot transfer tokens you don't own
+    const { result: transferResult } = simnet.callPublicFn(
+      contractName,
+      "transfer-from",
+      [Cl.principal(wallet1), Cl.principal(wallet3), Cl.uint(1), Cl.uint(1000)],
+      wallet2 // wallet2 trying to transfer wallet1's tokens
+    );
+    expect(transferResult).toBeErr(Cl.uint(401)); // ERR-UNAUTHORIZED
+
+    // Cannot burn tokens without approval
+    const { result: burnResult } = simnet.callPublicFn(
+      contractName,
+      "burn",
+      [Cl.principal(wallet1), Cl.uint(1), Cl.uint(500)],
+      wallet2 // wallet2 trying to burn wallet1's tokens
+    );
+    expect(burnResult).toBeErr(Cl.uint(401)); // ERR-UNAUTHORIZED
+  });
+
+  it("should validate input parameters correctly", () => {
+    // Cannot approve yourself
+    const { result: selfApprovalResult } = simnet.callPublicFn(
+      contractName,
+      "set-approval-for-all",
+      [Cl.principal(wallet1), Cl.bool(true)],
+      wallet1
+    );
+    expect(selfApprovalResult).toBeErr(Cl.uint(406)); // ERR-INVALID-RECIPIENT
+
+    // Cannot transfer to yourself
+    const { result: selfTransferResult } = simnet.callPublicFn(
+      contractName,
+      "transfer-from",
+      [Cl.principal(wallet1), Cl.principal(wallet1), Cl.uint(1), Cl.uint(100)],
+      wallet1
+    );
+    expect(selfTransferResult).toBeErr(Cl.uint(405)); // ERR-SELF-TRANSFER
+  });
+});
