@@ -1559,3 +1559,92 @@ describe("Bitdap Multi Token - Security and Authorization Tests", () => {
     expect(selfTransferResult).toBeErr(Cl.uint(405)); // ERR-SELF-TRANSFER
   });
 });
+describe("Bitdap Multi Token - Gas Optimization and Efficiency Tests", () => {
+  it("should efficiently handle zero-amount operations", () => {
+    // Create token for efficiency tests
+    simnet.callPublicFn(
+      contractName,
+      "create-token",
+      [
+        Cl.stringUtf8("Efficiency Token"),
+        Cl.stringUtf8("EFF"),
+        Cl.uint(18),
+        Cl.bool(true),
+        Cl.none()
+      ],
+      deployer
+    );
+
+    // Batch operations with zero amounts should be handled efficiently
+    const { result: batchMintResult } = simnet.callPublicFn(
+      contractName,
+      "batch-mint",
+      [
+        Cl.principal(wallet1),
+        Cl.list([Cl.uint(1), Cl.uint(1), Cl.uint(1)]),
+        Cl.list([Cl.uint(0), Cl.uint(100), Cl.uint(0)]) // Mixed zero and non-zero
+      ],
+      deployer
+    );
+    expect(batchMintResult).toBeOk(Cl.bool(true));
+
+    // Only the non-zero amount should be minted
+    const balanceResult = simnet.callReadOnlyFn(
+      contractName,
+      "get-balance",
+      [Cl.principal(wallet1), Cl.uint(1)],
+      deployer
+    );
+    expect(balanceResult.result).toBeOk(Cl.uint(100));
+  });
+
+  it("should handle repeated operations on same token efficiently", () => {
+    // Create and mint initial tokens
+    simnet.callPublicFn(
+      contractName,
+      "create-token",
+      [
+        Cl.stringUtf8("Repeated Token"),
+        Cl.stringUtf8("REP"),
+        Cl.uint(18),
+        Cl.bool(true),
+        Cl.none()
+      ],
+      deployer
+    );
+    simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(wallet1), Cl.uint(1), Cl.uint(10000)],
+      deployer
+    );
+
+    // Perform multiple small transfers
+    for (let i = 0; i < 5; i++) {
+      const { result } = simnet.callPublicFn(
+        contractName,
+        "transfer-from",
+        [Cl.principal(wallet1), Cl.principal(wallet2), Cl.uint(1), Cl.uint(100)],
+        wallet1
+      );
+      expect(result).toBeOk(Cl.bool(true));
+    }
+
+    // Verify final balances
+    const wallet1Balance = simnet.callReadOnlyFn(
+      contractName,
+      "get-balance",
+      [Cl.principal(wallet1), Cl.uint(1)],
+      deployer
+    );
+    expect(wallet1Balance.result).toBeOk(Cl.uint(9500));
+
+    const wallet2Balance = simnet.callReadOnlyFn(
+      contractName,
+      "get-balance",
+      [Cl.principal(wallet2), Cl.uint(1)],
+      deployer
+    );
+    expect(wallet2Balance.result).toBeOk(Cl.uint(500));
+  });
+});
