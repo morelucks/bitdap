@@ -186,6 +186,25 @@
 
 ;; Private Functions
 
+;; Enhanced validation helpers
+(define-private (validate-string-length (str (string-ascii 64)) (min-len uint) (max-len uint))
+    (let ((str-len (len str)))
+        (and (>= str-len min-len) (<= str-len max-len))
+    )
+)
+
+(define-private (validate-utf8-length (str (string-utf8 256)) (max-len uint))
+    (<= (len str) max-len)
+)
+
+(define-private (is-zero-address (addr principal))
+    (is-eq addr 'SP000000000000000000002Q6VF78)
+)
+
+(define-private (validate-percentage (percent uint) (max-percent uint))
+    (<= percent max-percent)
+)
+
 ;; Check if caller is contract owner
 (define-private (is-owner (caller principal))
     (is-eq caller (var-get contract-owner))
