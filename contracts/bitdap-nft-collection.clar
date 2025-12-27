@@ -525,25 +525,43 @@
     (uri (optional (string-utf8 256)))
     (description (string-utf8 256))
 )
-    (begin
-        ;; Validate caller is owner
+    (let (
+        (old-name (var-get collection-name))
+        (old-symbol (var-get collection-symbol))
+        (old-uri (var-get collection-uri))
+        (old-description (var-get collection-description))
+    )
+        ;; Enhanced validation
         (asserts! (is-owner tx-sender) ERR-UNAUTHORIZED)
+        (asserts! (validate-string-length name u1 u64) ERR-INVALID-STRING-LENGTH)
+        (asserts! (validate-string-length symbol u1 u16) ERR-INVALID-STRING-LENGTH)
+        (asserts! (validate-utf8-length description u256) ERR-INVALID-STRING-LENGTH)
         
-        ;; Update collection metadata
+        ;; Validate URI if provided
+        (match uri
+            some-uri (asserts! (validate-utf8-length some-uri u256) ERR-INVALID-METADATA)
+            true
+        )
+        
+        ;; Update collection metadata with validation
         (var-set collection-name name)
         (var-set collection-symbol symbol)
         (var-set collection-uri uri)
         (var-set collection-description description)
         
-        ;; Emit metadata update event
+        ;; Enhanced metadata update event with before/after values
         (print {
             event: "collection-metadata-updated",
-            name: name,
-            symbol: symbol,
-            uri: uri,
-            description: description,
+            changes: {
+                name: { old: old-name, new: name },
+                symbol: { old: old-symbol, new: symbol },
+                uri: { old: old-uri, new: uri },
+                description: { old: old-description, new: description }
+            },
             updated-by: tx-sender,
-            timestamp: block-height
+            timestamp: block-height,
+            block-height: block-height,
+            validated: true
         })
         
         (ok true)
@@ -554,21 +572,37 @@
 (define-read-only (get-collection-description)
     (ok (var-get collection-description))
 )
-;; Set mint price (owner only)
+;; Enhanced mint price setting with validation
 (define-public (set-mint-price (price uint))
-    (begin
+    (let (
+        (old-price (var-get mint-price))
+        (max-reasonable-price u100000000000) ;; 100,000 STX max
+    )
+        ;; Enhanced validation
         (asserts! (is-owner tx-sender) ERR-UNAUTHORIZED)
+        (asserts! (<= price max-reasonable-price) ERR-INVALID-AMOUNT)
+        
+        ;; Update mint price
         (var-set mint-price price)
         
+        ;; Enhanced price update event
         (print {
             event: "mint-price-updated",
-            price: price,
+            price-change: {
+                old-price: old-price,
+                new-price: price,
+                change-amount: (if (>= price old-price) (- price old-price) (- old-price price)),
+                change-type: (if (>= price old-price) "increase" "decrease")
+            },
             updated-by: tx-sender,
-            timestamp: block-height
+            timestamp: block-height,
+            validated: true,
+            max-allowed: max-reasonable-price
         })
         
         (ok true)
     )
+)
 )
 
 ;; Set per-address minting limit (owner only)
