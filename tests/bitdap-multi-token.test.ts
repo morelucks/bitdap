@@ -1035,3 +1035,105 @@ describe("Bitdap Multi Token - Token Existence and Validation", () => {
     expect(supplyResult.result).toBeErr(Cl.uint(408)); // ERR-TOKEN-NOT-EXISTS
   });
 });
+describe("Bitdap Multi Token - Error Handling and Edge Cases", () => {
+  beforeEach(() => {
+    // Create test tokens
+    simnet.callPublicFn(
+      contractName,
+      "create-token",
+      [
+        Cl.stringUtf8("Error Test Token"),
+        Cl.stringUtf8("ERR"),
+        Cl.uint(18),
+        Cl.bool(true),
+        Cl.none()
+      ],
+      deployer
+    );
+    simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(wallet1), Cl.uint(1), Cl.uint(1000)],
+      deployer
+    );
+  });
+
+  it("should handle maximum token creation", () => {
+    // Create multiple tokens to test limits
+    for (let i = 2; i <= 5; i++) {
+      const { result } = simnet.callPublicFn(
+        contractName,
+        "create-token",
+        [
+          Cl.stringUtf8(`Token ${i}`),
+          Cl.stringUtf8(`TK${i}`),
+          Cl.uint(18),
+          Cl.bool(true),
+          Cl.none()
+        ],
+        deployer
+      );
+      expect(result).toBeOk(Cl.uint(i));
+    }
+
+    // Verify next token ID
+    const nextIdResult = simnet.callReadOnlyFn(
+      contractName,
+      "get-next-token-id",
+      [],
+      deployer
+    );
+    expect(nextIdResult.result).toBeOk(Cl.uint(6));
+  });
+
+  it("should handle large amounts in operations", () => {
+    const largeAmount = 999999999999;
+    
+    // Test minting large amount
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(wallet2), Cl.uint(1), Cl.uint(largeAmount)],
+      deployer
+    );
+    expect(result).toBeOk(Cl.bool(true));
+
+    // Verify balance
+    const balanceResult = simnet.callReadOnlyFn(
+      contractName,
+      "get-balance",
+      [Cl.principal(wallet2), Cl.uint(1)],
+      deployer
+    );
+    expect(balanceResult.result).toBeOk(Cl.uint(largeAmount));
+  });
+
+  it("should handle empty batch operations", () => {
+    // Test empty batch mint
+    const { result: batchMintResult } = simnet.callPublicFn(
+      contractName,
+      "batch-mint",
+      [
+        Cl.principal(wallet1),
+        Cl.list([]),
+        Cl.list([])
+      ],
+      deployer
+    );
+    expect(batchMintResult).toBeOk(Cl.bool(true));
+
+    // Test empty batch transfer
+    const { result: batchTransferResult } = simnet.callPublicFn(
+      contractName,
+      "batch-transfer-from",
+      [
+        Cl.principal(wallet1),
+        Cl.principal(wallet2),
+        Cl.list([]),
+        Cl.list([])
+      ],
+      wallet1
+    );
+    expect(batchTransferResult).toBeOk(Cl.tuple({ from: Cl.principal(wallet1), to: Cl.principal(wallet2) }));
+  });
+});
