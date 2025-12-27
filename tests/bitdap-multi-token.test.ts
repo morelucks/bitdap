@@ -1014,4 +1014,24 @@ describe("Bitdap Multi Token - Token Existence and Validation", () => {
     );
     expect(metadataResult.result).toBeErr(Cl.uint(408)); // ERR-TOKEN-NOT-EXISTS
   });
+
+  it("should handle edge cases for token operations", () => {
+    // Test getting URI for non-existent token
+    const uriResult = simnet.callReadOnlyFn(
+      contractName,
+      "get-token-uri",
+      [Cl.uint(999)],
+      deployer
+    );
+    expect(uriResult.result).toBeErr(Cl.uint(408)); // ERR-TOKEN-NOT-EXISTS
+
+    // Test getting total supply for non-existent token
+    const supplyResult = simnet.callReadOnlyFn(
+      contractName,
+      "get-total-supply",
+      [Cl.uint(999)],
+      deployer
+    );
+    expect(supplyResult.result).toBeErr(Cl.uint(408)); // ERR-TOKEN-NOT-EXISTS
+  });
 });
