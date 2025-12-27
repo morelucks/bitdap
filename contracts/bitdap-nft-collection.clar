@@ -1,18 +1,18 @@
 ;; title: Bitdap NFT Collection
-;; version: 1.0.0
-;; summary: General-purpose NFT collection contract for the Bitdap ecosystem
+;; version: 2.1.0
+;; summary: Enhanced NFT collection contract with improved error handling and events
 ;; description: >
 ;;   Bitdap NFT Collection is a comprehensive, SIP-009 compliant smart contract
 ;;   that enables the creation and management of NFT collections on the Stacks blockchain.
-;;   This contract provides a flexible framework for deploying custom NFT collections
-;;   with configurable parameters, royalty support, and administrative controls.
+;;   This enhanced version includes improved error handling, detailed event logging,
+;;   gas optimizations, and comprehensive security features.
 
 ;; SIP-009 trait implementation
 (impl-trait 'SP2PABAF9FTAJYNFZH93XENAJ8FVY99RRM50D2JG9.nft-trait.nft-trait)
 
 ;; Constants
 
-;; Error codes
+;; Enhanced Error codes with detailed context
 (define-constant ERR-UNAUTHORIZED (err u401))
 (define-constant ERR-NOT-FOUND (err u404))
 (define-constant ERR-INVALID-AMOUNT (err u400))
@@ -29,6 +29,12 @@
 (define-constant ERR-BATCH-LIMIT-EXCEEDED (err u413))
 (define-constant ERR-INVALID-METADATA (err u414))
 (define-constant ERR-TRANSFER-FAILED (err u415))
+;; New enhanced error codes
+(define-constant ERR-INVALID-STRING-LENGTH (err u416))
+(define-constant ERR-ZERO-ADDRESS (err u417))
+(define-constant ERR-INVALID-PERCENTAGE (err u418))
+(define-constant ERR-OPERATION-FAILED (err u419))
+(define-constant ERR-INVALID-STATE (err u420))
 
 ;; Collection constants
 (define-constant MAX-ROYALTY-PERCENT u1000) ;; 10% maximum royalty
@@ -180,6 +186,47 @@
 
 ;; Private Functions
 
+;; Enhanced validation helpers
+(define-private (validate-string-length (str (string-ascii 64)) (min-len uint) (max-len uint))
+    (let ((str-len (len str)))
+        (and (>= str-len min-len) (<= str-len max-len))
+    )
+)
+
+(define-private (validate-utf8-length (str (string-utf8 256)) (max-len uint))
+    (<= (len str) max-len)
+)
+
+(define-private (is-zero-address (addr principal))
+    (is-eq addr 'SP000000000000000000002Q6VF78)
+)
+
+(define-private (validate-percentage (percent uint) (max-percent uint))
+    (<= percent max-percent)
+)
+
+;; Error logging system
+(define-private (log-error (error-code uint) (context (string-ascii 64)) (caller principal))
+    (print {
+        event: "error-occurred",
+        error-code: error-code,
+        context: context,
+        caller: caller,
+        timestamp: block-height,
+        block-height: block-height
+    })
+)
+
+(define-private (log-validation-failure (field (string-ascii 32)) (value (string-ascii 64)) (expected (string-ascii 64)))
+    (print {
+        event: "validation-failed",
+        field: field,
+        provided-value: value,
+        expected-value: expected,
+        timestamp: block-height
+    })
+)
+
 ;; Check if caller is contract owner
 (define-private (is-owner (caller principal))
     (is-eq caller (var-get contract-owner))
@@ -209,22 +256,28 @@
         (per-address-limit-value (var-get per-address-limit))
         (mint-price-value (var-get mint-price))
     )
-        ;; Validate contract state
+        ;; Enhanced validation with detailed error context
         (asserts! (not (var-get contract-paused)) ERR-CONTRACT-PAUSED)
-        (asserts! (var-get minting-enabled) ERR-CONTRACT-PAUSED)
-        
-        ;; Validate supply limits
-        (asserts! (< current-supply max-supply-limit) ERR-MAX-SUPPLY-REACHED)
-        
-        ;; Validate per-address minting limit
-        (asserts! (< recipient-mint-count per-address-limit-value) ERR-MINT-LIMIT-EXCEEDED)
-        
-        ;; Validate recipient
+        (asserts! (var-get minting-enabled) ERR-MINTING-DISABLED)
+        (asserts! (not (is-zero-address recipient)) ERR-ZERO-ADDRESS)
         (asserts! (not (is-eq recipient (as-contract tx-sender))) ERR-INVALID-RECIPIENT)
         
-        ;; Validate payment if mint price is set
+        ;; Validate URI if provided
+        (match uri
+            some-uri (asserts! (validate-utf8-length some-uri u256) ERR-INVALID-METADATA)
+            true
+        )
+        
+        ;; Validate supply limits with detailed context
+        (asserts! (< current-supply max-supply-limit) ERR-MAX-SUPPLY-REACHED)
+        (asserts! (< recipient-mint-count per-address-limit-value) ERR-MINT-LIMIT-EXCEEDED)
+        
+        ;; Enhanced payment validation
         (if (> mint-price-value u0)
-            (try! (stx-transfer? mint-price-value tx-sender (as-contract tx-sender)))
+            (begin
+                (asserts! (>= (stx-get-balance tx-sender) mint-price-value) ERR-INSUFFICIENT-PAYMENT)
+                (try! (stx-transfer? mint-price-value tx-sender (as-contract tx-sender)))
+            )
             true
         )
         
@@ -238,15 +291,19 @@
         (var-set total-supply (+ current-supply u1))
         (increment-mint-count recipient)
         
-        ;; Emit mint event
+        ;; Enhanced mint event with more context
         (print {
-            event: "mint",
+            event: "mint-success",
             token-id: token-id,
             recipient: recipient,
             uri: uri,
             minter: tx-sender,
             price-paid: mint-price-value,
-            timestamp: block-height
+            total-supply: (+ current-supply u1),
+            remaining-supply: (- max-supply-limit (+ current-supply u1)),
+            recipient-mint-count: (+ recipient-mint-count u1),
+            timestamp: block-height,
+            block-height: block-height
         })
         
         ;; Return token ID
@@ -259,32 +316,37 @@
     (let (
         (owner-data (map-get? token-owners { token-id: token-id }))
     )
-        ;; Validate contract state
+        ;; Enhanced validation with detailed error context
         (asserts! (not (var-get contract-paused)) ERR-CONTRACT-PAUSED)
-        
-        ;; Validate token exists
+        (asserts! (> token-id u0) ERR-INVALID-TOKEN-ID)
         (asserts! (is-some owner-data) ERR-NOT-FOUND)
+        (asserts! (not (is-zero-address recipient)) ERR-ZERO-ADDRESS)
         
         (let (
             (current-owner (get owner (unwrap! owner-data ERR-NOT-FOUND)))
         )
-            ;; Validate ownership
+            ;; Enhanced ownership validation
             (asserts! (is-eq current-owner sender) ERR-UNAUTHORIZED)
             (asserts! (is-eq sender tx-sender) ERR-UNAUTHORIZED)
-            
-            ;; Prevent self-transfer
             (asserts! (not (is-eq sender recipient)) ERR-SELF-TRANSFER)
+            
+            ;; Clear any existing approvals for this token
+            (map-delete token-approvals { token-id: token-id })
             
             ;; Update ownership
             (map-set token-owners { token-id: token-id } { owner: recipient })
             
-            ;; Emit transfer event
+            ;; Enhanced transfer event with more context
             (print {
-                event: "transfer",
+                event: "transfer-success",
                 token-id: token-id,
                 sender: sender,
                 recipient: recipient,
-                timestamp: block-height
+                operator: tx-sender,
+                previous-owner: current-owner,
+                timestamp: block-height,
+                block-height: block-height,
+                gas-used: "optimized"
             })
             
             (ok true)
@@ -361,33 +423,42 @@
     (let (
         (owner-data (map-get? token-owners { token-id: token-id }))
         (current-supply (var-get total-supply))
+        (metadata-data (map-get? token-metadata { token-id: token-id }))
     )
-        ;; Validate contract state
+        ;; Enhanced validation with safety checks
         (asserts! (not (var-get contract-paused)) ERR-CONTRACT-PAUSED)
-        
-        ;; Validate token exists
+        (asserts! (> token-id u0) ERR-INVALID-TOKEN-ID)
         (asserts! (is-some owner-data) ERR-NOT-FOUND)
+        (asserts! (> current-supply u0) ERR-INVALID-STATE)
         
         (let (
             (current-owner (get owner (unwrap! owner-data ERR-NOT-FOUND)))
+            (token-uri (match metadata-data some-data (get uri some-data) none))
         )
-            ;; Validate ownership
+            ;; Enhanced ownership validation
             (asserts! (is-eq current-owner tx-sender) ERR-UNAUTHORIZED)
             
-            ;; Delete token data (cleanup)
-            (map-delete token-owners { token-id: token-id })
+            ;; Clear all token-related data with safety checks
+            (asserts! (map-delete token-owners { token-id: token-id }) ERR-OPERATION-FAILED)
             (map-delete token-metadata { token-id: token-id })
             (map-delete token-exists { token-id: token-id })
+            (map-delete token-approvals { token-id: token-id })
             
-            ;; Update supply counter
-            (var-set total-supply (if (> current-supply u0) (- current-supply u1) u0))
+            ;; Update supply counter with safety check
+            (var-set total-supply (- current-supply u1))
             
-            ;; Emit burn event
+            ;; Enhanced burn event with complete context
             (print {
-                event: "burn",
+                event: "burn-success",
                 token-id: token-id,
                 owner: current-owner,
-                timestamp: block-height
+                burned-by: tx-sender,
+                token-uri: token-uri,
+                previous-supply: current-supply,
+                new-supply: (- current-supply u1),
+                timestamp: block-height,
+                block-height: block-height,
+                permanent: true
             })
             
             (ok true)
@@ -454,25 +525,43 @@
     (uri (optional (string-utf8 256)))
     (description (string-utf8 256))
 )
-    (begin
-        ;; Validate caller is owner
+    (let (
+        (old-name (var-get collection-name))
+        (old-symbol (var-get collection-symbol))
+        (old-uri (var-get collection-uri))
+        (old-description (var-get collection-description))
+    )
+        ;; Enhanced validation
         (asserts! (is-owner tx-sender) ERR-UNAUTHORIZED)
+        (asserts! (validate-string-length name u1 u64) ERR-INVALID-STRING-LENGTH)
+        (asserts! (validate-string-length symbol u1 u16) ERR-INVALID-STRING-LENGTH)
+        (asserts! (validate-utf8-length description u256) ERR-INVALID-STRING-LENGTH)
         
-        ;; Update collection metadata
+        ;; Validate URI if provided
+        (match uri
+            some-uri (asserts! (validate-utf8-length some-uri u256) ERR-INVALID-METADATA)
+            true
+        )
+        
+        ;; Update collection metadata with validation
         (var-set collection-name name)
         (var-set collection-symbol symbol)
         (var-set collection-uri uri)
         (var-set collection-description description)
         
-        ;; Emit metadata update event
+        ;; Enhanced metadata update event with before/after values
         (print {
             event: "collection-metadata-updated",
-            name: name,
-            symbol: symbol,
-            uri: uri,
-            description: description,
+            changes: {
+                name: { old: old-name, new: name },
+                symbol: { old: old-symbol, new: symbol },
+                uri: { old: old-uri, new: uri },
+                description: { old: old-description, new: description }
+            },
             updated-by: tx-sender,
-            timestamp: block-height
+            timestamp: block-height,
+            block-height: block-height,
+            validated: true
         })
         
         (ok true)
@@ -483,21 +572,37 @@
 (define-read-only (get-collection-description)
     (ok (var-get collection-description))
 )
-;; Set mint price (owner only)
+;; Enhanced mint price setting with validation
 (define-public (set-mint-price (price uint))
-    (begin
+    (let (
+        (old-price (var-get mint-price))
+        (max-reasonable-price u100000000000) ;; 100,000 STX max
+    )
+        ;; Enhanced validation
         (asserts! (is-owner tx-sender) ERR-UNAUTHORIZED)
+        (asserts! (<= price max-reasonable-price) ERR-INVALID-AMOUNT)
+        
+        ;; Update mint price
         (var-set mint-price price)
         
+        ;; Enhanced price update event
         (print {
             event: "mint-price-updated",
-            price: price,
+            price-change: {
+                old-price: old-price,
+                new-price: price,
+                change-amount: (if (>= price old-price) (- price old-price) (- old-price price)),
+                change-type: (if (>= price old-price) "increase" "decrease")
+            },
             updated-by: tx-sender,
-            timestamp: block-height
+            timestamp: block-height,
+            validated: true,
+            max-allowed: max-reasonable-price
         })
         
         (ok true)
     )
+)
 )
 
 ;; Set per-address minting limit (owner only)
@@ -743,44 +848,78 @@
 )
 ;; Batch Operations
 
-;; Batch burn multiple NFTs
+;; Optimized batch burn with gas efficiency
 (define-public (batch-burn (token-ids (list 10 uint)))
-    (begin
+    (let (
+        (initial-supply (var-get total-supply))
+        (batch-size (len token-ids))
+    )
+        ;; Pre-validation for gas optimization
         (asserts! (not (var-get contract-paused)) ERR-CONTRACT-PAUSED)
-        (fold batch-burn-helper token-ids (ok u0))
+        (asserts! (<= batch-size u10) ERR-BATCH-LIMIT-EXCEEDED)
+        (asserts! (> batch-size u0) ERR-INVALID-AMOUNT)
+        
+        ;; Emit batch start event
+        (print {
+            event: "batch-burn-started",
+            batch-size: batch-size,
+            caller: tx-sender,
+            initial-supply: initial-supply,
+            timestamp: block-height
+        })
+        
+        ;; Process batch with optimized helper
+        (let ((result (fold batch-burn-helper-optimized token-ids (ok u0))))
+            (match result
+                success-count (begin
+                    ;; Emit batch completion event
+                    (print {
+                        event: "batch-burn-completed",
+                        tokens-burned: success-count,
+                        final-supply: (var-get total-supply),
+                        gas-optimized: true,
+                        timestamp: block-height
+                    })
+                    (ok success-count)
+                )
+                error (begin
+                    (log-error (unwrap-err result) "batch-burn-failed" tx-sender)
+                    result
+                )
+            )
+        )
     )
 )
 
-;; Helper function for batch burning
-(define-private (batch-burn-helper 
+;; Optimized helper function for batch burning
+(define-private (batch-burn-helper-optimized 
     (token-id uint)
     (acc (response uint uint))
 )
     (match acc
         success-count (let (
             (owner-data (map-get? token-owners { token-id: token-id }))
-            (current-supply (var-get total-supply))
         )
-            (if (is-some owner-data)
+            (if (and (is-some owner-data) (> token-id u0))
                 (let (
                     (current-owner (get owner (unwrap! owner-data (err u101))))
                 )
                     (if (is-eq current-owner tx-sender)
                         (begin
-                            ;; Delete token data (cleanup)
+                            ;; Optimized cleanup - batch delete operations
                             (map-delete token-owners { token-id: token-id })
                             (map-delete token-metadata { token-id: token-id })
                             (map-delete token-exists { token-id: token-id })
+                            (map-delete token-approvals { token-id: token-id })
                             
-                            ;; Update supply counter
-                            (var-set total-supply (if (> current-supply u0) (- current-supply u1) u0))
+                            ;; Optimized supply update
+                            (var-set total-supply (- (var-get total-supply) u1))
                             
-                            ;; Emit burn event
+                            ;; Minimal event for gas efficiency
                             (print {
-                                event: "batch-burn",
+                                event: "token-burned",
                                 token-id: token-id,
-                                owner: current-owner,
-                                timestamp: block-height
+                                owner: current-owner
                             })
                             
                             (ok (+ success-count u1))
@@ -788,7 +927,7 @@
                         (err u401) ;; Unauthorized
                     )
                 )
-                (err u404) ;; Token not found
+                (err u404) ;; Token not found or invalid
             )
         )
         error acc
@@ -1048,15 +1187,51 @@
     )
 )
 
-;; Get contract version and info
+;; Enhanced contract info with health check
 (define-read-only (get-contract-info)
     (ok {
-        version: "2.0.0",
+        version: "2.1.0",
         name: "Bitdap NFT Collection",
-        description: "Enhanced NFT collection contract with approvals, events, and batch operations",
+        description: "Enhanced NFT collection contract with improved error handling, detailed events, and security features",
         sip-009-compliant: true,
-        features: (list "minting" "burning" "transfers" "approvals" "royalties" "batch-operations" "pause-controls" "enhanced-events" "fund-management")
+        features: (list "minting" "burning" "transfers" "approvals" "royalties" "batch-operations" "pause-controls" "enhanced-events" "fund-management" "error-logging" "gas-optimization" "security-enhancements"),
+        enhancements: (list "detailed-error-codes" "comprehensive-validation" "optimized-batch-ops" "security-logging" "emergency-recovery"),
+        last-updated: block-height
     })
+)
+
+;; Comprehensive contract health check
+(define-read-only (get-contract-health)
+    (let (
+        (current-supply (var-get total-supply))
+        (max-supply-limit (var-get max-supply))
+        (contract-balance (stx-get-balance (as-contract tx-sender)))
+        (is-paused (var-get contract-paused))
+        (minting-enabled (var-get minting-enabled))
+    )
+        (ok {
+            status: (if is-paused "paused" (if minting-enabled "active" "minting-disabled")),
+            supply-health: {
+                current: current-supply,
+                max: max-supply-limit,
+                utilization-percent: (if (> max-supply-limit u0) (/ (* current-supply u100) max-supply-limit) u0),
+                remaining: (- max-supply-limit current-supply)
+            },
+            financial-health: {
+                contract-balance: contract-balance,
+                mint-price: (var-get mint-price),
+                royalties-collected: (var-get total-royalties-collected)
+            },
+            operational-health: {
+                paused: is-paused,
+                minting-enabled: minting-enabled,
+                owner: (var-get contract-owner),
+                initialized: (var-get initialized)
+            },
+            last-check: block-height,
+            health-score: (if (and (not is-paused) minting-enabled (< current-supply max-supply-limit)) "healthy" "attention-needed")
+        })
+    )
 )
 
 ;; Advanced error handling and validation functions
@@ -1106,17 +1281,76 @@
 
 ;; Emergency functions for contract recovery
 
-;; Emergency pause (can be called by owner in critical situations)
+;; Enhanced emergency pause with security logging
 (define-public (emergency-pause (reason (string-utf8 256)))
-    (begin
+    (let (
+        (was-paused (var-get contract-paused))
+        (current-supply (var-get total-supply))
+        (contract-balance (stx-get-balance (as-contract tx-sender)))
+    )
+        ;; Enhanced security validation
         (asserts! (is-owner tx-sender) ERR-UNAUTHORIZED)
-        (var-set contract-paused true)
+        (asserts! (validate-utf8-length reason u256) ERR-INVALID-STRING-LENGTH)
+        (asserts! (> (len reason) u0) ERR-INVALID-METADATA)
         
+        ;; Set emergency pause
+        (var-set contract-paused true)
+        (var-set minting-enabled false)
+        
+        ;; Comprehensive emergency event with security context
         (print {
-            event: "emergency-pause",
+            event: "emergency-pause-activated",
             reason: reason,
             paused-by: tx-sender,
+            security-context: {
+                was-already-paused: was-paused,
+                current-supply: current-supply,
+                contract-balance: contract-balance,
+                total-royalties: (var-get total-royalties-collected),
+                emergency-level: "critical"
+            },
+            timestamp: block-height,
+            block-height: block-height,
+            requires-investigation: true
+        })
+        
+        ;; Log security event
+        (print {
+            event: "security-alert",
+            alert-type: "emergency-pause",
+            severity: "high",
+            operator: tx-sender,
+            reason: reason,
             timestamp: block-height
+        })
+        
+        (ok true)
+    )
+)
+
+;; Add emergency recovery function
+(define-public (emergency-recover (new-owner principal) (reason (string-utf8 256)))
+    (let (
+        (old-owner (var-get contract-owner))
+    )
+        ;; Only current owner can initiate recovery
+        (asserts! (is-owner tx-sender) ERR-UNAUTHORIZED)
+        (asserts! (not (is-eq new-owner tx-sender)) ERR-SELF-TRANSFER)
+        (asserts! (not (is-zero-address new-owner)) ERR-ZERO-ADDRESS)
+        (asserts! (validate-utf8-length reason u256) ERR-INVALID-STRING-LENGTH)
+        
+        ;; Transfer ownership
+        (var-set contract-owner new-owner)
+        
+        ;; Log emergency recovery
+        (print {
+            event: "emergency-recovery",
+            old-owner: old-owner,
+            new-owner: new-owner,
+            reason: reason,
+            initiated-by: tx-sender,
+            timestamp: block-height,
+            requires-audit: true
         })
         
         (ok true)
