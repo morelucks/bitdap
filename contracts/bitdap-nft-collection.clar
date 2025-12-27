@@ -423,33 +423,42 @@
     (let (
         (owner-data (map-get? token-owners { token-id: token-id }))
         (current-supply (var-get total-supply))
+        (metadata-data (map-get? token-metadata { token-id: token-id }))
     )
-        ;; Validate contract state
+        ;; Enhanced validation with safety checks
         (asserts! (not (var-get contract-paused)) ERR-CONTRACT-PAUSED)
-        
-        ;; Validate token exists
+        (asserts! (> token-id u0) ERR-INVALID-TOKEN-ID)
         (asserts! (is-some owner-data) ERR-NOT-FOUND)
+        (asserts! (> current-supply u0) ERR-INVALID-STATE)
         
         (let (
             (current-owner (get owner (unwrap! owner-data ERR-NOT-FOUND)))
+            (token-uri (match metadata-data some-data (get uri some-data) none))
         )
-            ;; Validate ownership
+            ;; Enhanced ownership validation
             (asserts! (is-eq current-owner tx-sender) ERR-UNAUTHORIZED)
             
-            ;; Delete token data (cleanup)
-            (map-delete token-owners { token-id: token-id })
+            ;; Clear all token-related data with safety checks
+            (asserts! (map-delete token-owners { token-id: token-id }) ERR-OPERATION-FAILED)
             (map-delete token-metadata { token-id: token-id })
             (map-delete token-exists { token-id: token-id })
+            (map-delete token-approvals { token-id: token-id })
             
-            ;; Update supply counter
-            (var-set total-supply (if (> current-supply u0) (- current-supply u1) u0))
+            ;; Update supply counter with safety check
+            (var-set total-supply (- current-supply u1))
             
-            ;; Emit burn event
+            ;; Enhanced burn event with complete context
             (print {
-                event: "burn",
+                event: "burn-success",
                 token-id: token-id,
                 owner: current-owner,
-                timestamp: block-height
+                burned-by: tx-sender,
+                token-uri: token-uri,
+                previous-supply: current-supply,
+                new-supply: (- current-supply u1),
+                timestamp: block-height,
+                block-height: block-height,
+                permanent: true
             })
             
             (ok true)
