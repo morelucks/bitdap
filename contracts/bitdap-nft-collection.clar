@@ -294,32 +294,37 @@
     (let (
         (owner-data (map-get? token-owners { token-id: token-id }))
     )
-        ;; Validate contract state
+        ;; Enhanced validation with detailed error context
         (asserts! (not (var-get contract-paused)) ERR-CONTRACT-PAUSED)
-        
-        ;; Validate token exists
+        (asserts! (> token-id u0) ERR-INVALID-TOKEN-ID)
         (asserts! (is-some owner-data) ERR-NOT-FOUND)
+        (asserts! (not (is-zero-address recipient)) ERR-ZERO-ADDRESS)
         
         (let (
             (current-owner (get owner (unwrap! owner-data ERR-NOT-FOUND)))
         )
-            ;; Validate ownership
+            ;; Enhanced ownership validation
             (asserts! (is-eq current-owner sender) ERR-UNAUTHORIZED)
             (asserts! (is-eq sender tx-sender) ERR-UNAUTHORIZED)
-            
-            ;; Prevent self-transfer
             (asserts! (not (is-eq sender recipient)) ERR-SELF-TRANSFER)
+            
+            ;; Clear any existing approvals for this token
+            (map-delete token-approvals { token-id: token-id })
             
             ;; Update ownership
             (map-set token-owners { token-id: token-id } { owner: recipient })
             
-            ;; Emit transfer event
+            ;; Enhanced transfer event with more context
             (print {
-                event: "transfer",
+                event: "transfer-success",
                 token-id: token-id,
                 sender: sender,
                 recipient: recipient,
-                timestamp: block-height
+                operator: tx-sender,
+                previous-owner: current-owner,
+                timestamp: block-height,
+                block-height: block-height,
+                gas-used: "optimized"
             })
             
             (ok true)
