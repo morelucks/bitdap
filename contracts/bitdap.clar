@@ -2676,7 +2676,7 @@
     (let (
         (user-data (default-to { active: false } (map-get? user-registry { user: user })))
         (blacklist-data (map-get? blacklisted-users { user: user }))
-        (seller-data (map-get? seller-listings { user: user }))
+        (seller-data (map-get? seller-listings { seller: user }))
     )
         (ok (tuple
             (user user)
@@ -2738,31 +2738,31 @@
         (basic-supply (get supply (default-to { supply: u0 } (map-get? tier-supplies { tier: TIER-BASIC }))))
         (pro-supply (get supply (default-to { supply: u0 } (map-get? tier-supplies { tier: TIER-PRO }))))
         (vip-supply (get supply (default-to { supply: u0 } (map-get? tier-supplies { tier: TIER-VIP }))))
-        (total-supply (var-get total-supply))
+        (current-total-supply (var-get total-supply))
     )
         (ok (tuple
             (basic (tuple
                 (current-supply basic-supply)
                 (max-supply MAX-BASIC-SUPPLY)
-                (percentage (if (> total-supply u0) (/ (* basic-supply u100) total-supply) u0))
+                (percentage (if (> current-total-supply u0) (/ (* basic-supply u100) current-total-supply) u0))
                 (remaining (- MAX-BASIC-SUPPLY basic-supply))
             ))
             (pro (tuple
                 (current-supply pro-supply)
                 (max-supply MAX-PRO-SUPPLY)
-                (percentage (if (> total-supply u0) (/ (* pro-supply u100) total-supply) u0))
+                (percentage (if (> current-total-supply u0) (/ (* pro-supply u100) current-total-supply) u0))
                 (remaining (- MAX-PRO-SUPPLY pro-supply))
             ))
             (vip (tuple
                 (current-supply vip-supply)
                 (max-supply MAX-VIP-SUPPLY)
-                (percentage (if (> total-supply u0) (/ (* vip-supply u100) total-supply) u0))
+                (percentage (if (> current-total-supply u0) (/ (* vip-supply u100) current-total-supply) u0))
                 (remaining (- MAX-VIP-SUPPLY vip-supply))
             ))
             (totals (tuple
-                (total-supply total-supply)
+                (total-supply current-total-supply)
                 (max-supply MAX-SUPPLY)
-                (utilization-percent (if (> MAX-SUPPLY u0) (/ (* total-supply u100) MAX-SUPPLY) u0))
+                (utilization-percent (if (> MAX-SUPPLY u0) (/ (* current-total-supply u100) MAX-SUPPLY) u0))
             ))
         ))
     )
@@ -2866,8 +2866,8 @@
 ;; Get comprehensive error information
 (define-read-only (get-error-info (error-code uint))
     (match (get-error-message error-code)
-        error-data (ok error-data)
-        (ok (tuple
+        ok-data (ok ok-data)
+        err-code (ok (tuple
             (category "unknown")
             (message u"Unknown error code")
             (suggestion u"Check error code documentation")
