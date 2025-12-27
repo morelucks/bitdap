@@ -1137,3 +1137,134 @@ describe("Bitdap Multi Token - Error Handling and Edge Cases", () => {
     expect(batchTransferResult).toBeOk(Cl.tuple({ from: Cl.principal(wallet1), to: Cl.principal(wallet2) }));
   });
 });
+describe("Bitdap Multi Token - Complex Scenarios", () => {
+  beforeEach(() => {
+    // Setup complex scenario with multiple tokens and users
+    simnet.callPublicFn(
+      contractName,
+      "create-token",
+      [
+        Cl.stringUtf8("Complex Token A"),
+        Cl.stringUtf8("CMPA"),
+        Cl.uint(18),
+        Cl.bool(true),
+        Cl.some(Cl.stringUtf8("https://example.com/cmpa"))
+      ],
+      deployer
+    );
+    simnet.callPublicFn(
+      contractName,
+      "create-token",
+      [
+        Cl.stringUtf8("Complex Token B"),
+        Cl.stringUtf8("CMPB"),
+        Cl.uint(6),
+        Cl.bool(false), // NFT
+        Cl.some(Cl.stringUtf8("https://example.com/cmpb"))
+      ],
+      deployer
+    );
+    
+    // Mint tokens to different users
+    simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(wallet1), Cl.uint(1), Cl.uint(5000)],
+      deployer
+    );
+    simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(wallet2), Cl.uint(1), Cl.uint(3000)],
+      deployer
+    );
+    simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(wallet1), Cl.uint(2), Cl.uint(1)], // NFT
+      deployer
+    );
+  });
+
+  it("should handle complex multi-user multi-token scenario", () => {
+    // wallet1 transfers some tokens to wallet3
+    const { result: transfer1 } = simnet.callPublicFn(
+      contractName,
+      "transfer-from",
+      [Cl.principal(wallet1), Cl.principal(wallet3), Cl.uint(1), Cl.uint(1000)],
+      wallet1
+    );
+    expect(transfer1).toBeOk(Cl.bool(true));
+
+    // wallet2 transfers some tokens to wallet3
+    const { result: transfer2 } = simnet.callPublicFn(
+      contractName,
+      "transfer-from",
+      [Cl.principal(wallet2), Cl.principal(wallet3), Cl.uint(1), Cl.uint(500)],
+      wallet2
+    );
+    expect(transfer2).toBeOk(Cl.bool(true));
+
+    // wallet1 transfers NFT to wallet2
+    const { result: nftTransfer } = simnet.callPublicFn(
+      contractName,
+      "transfer-from",
+      [Cl.principal(wallet1), Cl.principal(wallet2), Cl.uint(2), Cl.uint(1)],
+      wallet1
+    );
+    expect(nftTransfer).toBeOk(Cl.bool(true));
+
+    // Verify final balances
+    const wallet1Balance = simnet.callReadOnlyFn(
+      contractName,
+      "get-balance",
+      [Cl.principal(wallet1), Cl.uint(1)],
+      deployer
+    );
+    expect(wallet1Balance.result).toBeOk(Cl.uint(4000));
+
+    const wallet3Balance = simnet.callReadOnlyFn(
+      contractName,
+      "get-balance",
+      [Cl.principal(wallet3), Cl.uint(1)],
+      deployer
+    );
+    expect(wallet3Balance.result).toBeOk(Cl.uint(1500));
+
+    const wallet2NftBalance = simnet.callReadOnlyFn(
+      contractName,
+      "get-balance",
+      [Cl.principal(wallet2), Cl.uint(2)],
+      deployer
+    );
+    expect(wallet2NftBalance.result).toBeOk(Cl.uint(1));
+  });
+
+  it("should handle approval-based transfers correctly", () => {
+    // wallet1 approves wallet2 for all tokens
+    simnet.callPublicFn(
+      contractName,
+      "set-approval-for-all",
+      [Cl.principal(wallet2), Cl.bool(true)],
+      wallet1
+    );
+
+    // wallet2 burns some of wallet1's tokens
+    const { result: burnResult } = simnet.callPublicFn(
+      contractName,
+      "burn",
+      [Cl.principal(wallet1), Cl.uint(1), Cl.uint(500)],
+      wallet2
+    );
+    expect(burnResult).toBeOk(Cl.bool(true));
+
+    // Verify balance after burn
+    const wallet1Balance = simnet.callReadOnlyFn(
+      contractName,
+      "get-balance",
+      [Cl.principal(wallet1), Cl.uint(1)],
+      deployer
+    );
+    expect(wallet1Balance.result).toBeOk(Cl.uint(4500));
+  });
+});
