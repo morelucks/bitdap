@@ -451,6 +451,12 @@
     }
 )
 
+;; Staking rewards for NFT holders
+(define-map staking-rewards
+    { token-id: uint }
+    { staked-at: uint, rewards-earned: uint, last-claim: uint }
+)
+
 ;; Price history for tokens
 (define-map price-history
     { token-id: uint, sale-id: uint }
