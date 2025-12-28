@@ -503,6 +503,10 @@
 
 (define-data-var referral-reward uint u500000) ;; 0.5 STX reward
 
+;; Dynamic pricing based on demand
+(define-data-var base-mint-price uint u1000000) ;; 1 STX
+(define-data-var price-multiplier uint u100) ;; 1.0x multiplier
+
 ;; Staking rewards for NFT holders
 (define-map staking-rewards
     { token-id: uint }
