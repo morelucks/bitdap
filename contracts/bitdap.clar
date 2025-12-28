@@ -3786,3 +3786,24 @@
         ))
     )
 )
+;; Enhanced mint function with dynamic pricing
+(define-public (mint-with-payment (tier uint) (uri (optional (string-utf8 256))))
+    (let ((current-price (calculate-mint-price tier)))
+        (begin
+            (try! (stx-transfer? current-price tx-sender (var-get contract-owner)))
+            (mint-pass tier uri)
+        )
+    )
+)
+
+;; Calculate dynamic mint price
+(define-private (calculate-mint-price (tier uint))
+    (let ((base-price (var-get base-mint-price))
+          (multiplier (var-get price-multiplier))
+          (tier-multiplier (if (is-eq tier TIER-DIAMOND) u10
+                              (if (is-eq tier TIER-PLATINUM) u5
+                                  (if (is-eq tier TIER-VIP) u3
+                                      (if (is-eq tier TIER-PRO) u2 u1))))))
+        (* (* base-price tier-multiplier) (/ multiplier u100))
+    )
+)
