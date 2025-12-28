@@ -89,6 +89,11 @@
 (define-constant ERR-OVERFLOW (err u505))
 (define-constant ERR-UNDERFLOW (err u506))
 
+;; Network Errors (700-799) - Network and connectivity failures
+(define-constant ERR-NETWORK-TIMEOUT (err u700))
+(define-constant ERR-INVALID-RESPONSE (err u701))
+(define-constant ERR-CONNECTION-FAILED (err u702))
+
 ;; Marketplace Errors (600-699) - Marketplace-specific failures
 (define-constant ERR-LISTING-PRICE-TOO-LOW (err u600))
 (define-constant ERR-LISTING-PRICE-TOO-HIGH (err u601))
