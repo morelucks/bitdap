@@ -3716,3 +3716,42 @@
         )
     )
 )
+;; Enhanced analytics and reporting
+(define-read-only (get-comprehensive-stats)
+    (let (
+        (total-tokens (var-get total-supply))
+        (total-users (var-get user-count))
+        (total-transactions (var-get transaction-count))
+        (basic-count (get supply (default-to { supply: u0 } (map-get? tier-supplies { tier: TIER-BASIC }))))
+        (pro-count (get supply (default-to { supply: u0 } (map-get? tier-supplies { tier: TIER-PRO }))))
+        (vip-count (get supply (default-to { supply: u0 } (map-get? tier-supplies { tier: TIER-VIP }))))
+    )
+        (ok (tuple
+            (contract-version u5)
+            (total-supply total-tokens)
+            (user-metrics (tuple
+                (total-users total-users)
+                (active-listings (var-get listing-count))
+                (total-transactions total-transactions)
+            ))
+            (tier-distribution (tuple
+                (basic basic-count)
+                (pro pro-count)
+                (vip vip-count)
+                (utilization-rate (if (> MAX-SUPPLY u0) (/ (* total-tokens u100) MAX-SUPPLY) u0))
+            ))
+            (marketplace-health (tuple
+                (total-fees-collected (var-get total-fees-collected))
+                (average-fee-per-transaction (if (> total-transactions u0) 
+                    (/ (var-get total-fees-collected) total-transactions) u0))
+            ))
+            (system-status (tuple
+                (emergency-mode (var-get emergency-mode))
+                (mint-paused (var-get mint-paused))
+                (transfer-paused (var-get transfer-paused))
+                (marketplace-paused (var-get marketplace-paused))
+            ))
+            (timestamp stacks-block-height)
+        ))
+    )
+)
