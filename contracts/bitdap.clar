@@ -489,6 +489,12 @@
     }
 )
 
+;; Fractional ownership system
+(define-map fractional-shares
+    { token-id: uint, owner: principal }
+    { shares: uint, total-shares: uint }
+)
+
 ;; Referral system for growth
 (define-map referrals
     { referrer: principal, referee: principal }
