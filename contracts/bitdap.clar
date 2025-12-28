@@ -3666,3 +3666,53 @@
         (ok true)
     )
 )
+;; Tier upgrade function
+(define-public (upgrade-tier (token-id uint))
+    (begin
+        (try! (validate-token-owner token-id tx-sender))
+        (asserts! (var-get tier-upgrade-enabled) ERR-FEATURE-DISABLED)
+        
+        (match (get-tier token-id)
+            ok-tier (let ((current-tier ok-tier))
+                (if (is-eq current-tier TIER-BASIC)
+                    (begin
+                        ;; Upgrade Basic to Pro
+                        (try! (stx-transfer? (var-get upgrade-fee-basic-to-pro) tx-sender (var-get contract-owner)))
+                        (map-set token-metadata { token-id: token-id } 
+                            (merge (unwrap-panic (map-get? token-metadata { token-id: token-id }))
+                                   { tier: TIER-PRO, last-updated: stacks-block-height }))
+                        (ok TIER-PRO)
+                    )
+                    (if (is-eq current-tier TIER-PRO)
+                        (begin
+                            ;; Upgrade Pro to VIP
+                            (try! (stx-transfer? (var-get upgrade-fee-pro-to-vip) tx-sender (var-get contract-owner)))
+                            (map-set token-metadata { token-id: token-id }
+                                (merge (unwrap-panic (map-get? token-metadata { token-id: token-id }))
+                                       { tier: TIER-VIP, last-updated: stacks-block-height }))
+                            (ok TIER-VIP)
+                        )
+                        ERR-INVALID-TIER ;; Already VIP or invalid tier
+                    )
+                )
+            )
+            error (err error)
+        )
+    )
+)
+
+;; Loyalty points earning function
+(define-public (earn-loyalty-points (user principal) (points uint))
+    (begin
+        (try! (validate-admin tx-sender))
+        (let ((current-data (default-to { points: u0, last-earned: u0, tier-multiplier: u1 } 
+                                       (map-get? loyalty-points { user: user }))))
+            (map-set loyalty-points { user: user } {
+                points: (+ (get points current-data) points),
+                last-earned: stacks-block-height,
+                tier-multiplier: (get tier-multiplier current-data)
+            })
+            (ok true)
+        )
+    )
+)
