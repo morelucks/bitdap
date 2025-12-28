@@ -31,7 +31,7 @@
 ;; constants
 ;; - Collection-wide configuration, tier identifiers, and error codes.
 
-;; Enhanced Error Handling System
+;; Enhanced Error Handling System with Network Errors
 ;; Error codes are categorized for better debugging and user experience
 
 ;; Validation Errors (100-199) - Input validation failures
@@ -46,6 +46,8 @@
 (define-constant ERR-INVALID-PAGINATION (err u108))
 (define-constant ERR-INVALID-FILTER (err u109))
 (define-constant ERR-SELF-TRANSFER (err u110))
+(define-constant ERR-INVALID-SIGNATURE (err u111))
+(define-constant ERR-INVALID-NONCE (err u112))
 
 ;; Authorization Errors (200-299) - Permission and access control failures
 (define-constant ERR-UNAUTHORIZED (err u200))
