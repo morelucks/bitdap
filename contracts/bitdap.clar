@@ -204,6 +204,12 @@
 ;; Next listing ID to assign
 (define-data-var next-listing-id uint u1)
 
+;; Flash loan protection
+(define-data-var flash-loan-guard bool false)
+
+;; MEV protection timestamp
+(define-data-var last-block-timestamp uint u0)
+
 ;; Counter for total transactions (mints, transfers, burns)
 (define-data-var transaction-count uint u0)
 
