@@ -570,6 +570,14 @@
     }
 )
 
+;; Whitelist for exclusive access
+(define-map whitelist
+    { user: principal }
+    { whitelisted: bool, added-at: uint, tier-access: uint }
+)
+
+(define-data-var whitelist-enabled bool false)
+
 ;; Emergency controls
 (define-data-var emergency-mode bool false)
 (define-data-var mint-paused bool false)
