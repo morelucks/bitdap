@@ -184,6 +184,8 @@
 (define-constant MAX-BASIC-SUPPLY u7000)
 (define-constant MAX-PRO-SUPPLY u2500)
 (define-constant MAX-VIP-SUPPLY u500)
+(define-constant MAX-PLATINUM-SUPPLY u100)
+(define-constant MAX-DIAMOND-SUPPLY u25)
 
 ;; Tier upgrade system
 (define-data-var tier-upgrade-enabled bool true)
