@@ -163,8 +163,9 @@
     suggestion: u"Wait for contract to be unpaused by administrator"
 })
 
-;; Gas optimization constants
-(define-constant GAS-OPTIMIZED-BATCH-SIZE u50)
+;; Performance optimization constants
+(define-constant MAX-BATCH-OPERATIONS u25)
+(define-constant CACHE-EXPIRY-BLOCKS u144)
 (define-constant FAST-LOOKUP-CACHE-SIZE u100)
 
 ;; Tiers are represented as uints for compact on-chain storage.
