@@ -427,6 +427,12 @@
     { active: bool }
 )
 
+;; Multi-signature wallet support
+(define-map multisig-wallets
+    { wallet: principal }
+    { required-signatures: uint, signers: (list 10 principal) }
+)
+
 ;; Loyalty rewards tracking
 (define-map loyalty-points
     { user: principal }
