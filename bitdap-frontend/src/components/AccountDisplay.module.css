@@ -1,0 +1,156 @@
+.container {
+  padding: 1rem;
+}
+
+.card {
+  background-color: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  border-bottom: 1px solid #e5e7eb;
+  padding-bottom: 1rem;
+}
+
+.title {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #111827;
+}
+
+.network {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  background-color: #dbeafe;
+  color: #1e40af;
+  border-radius: 9999px;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.addressSection,
+.balanceSection,
+.shortAddress {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.addressContainer {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.address {
+  flex: 1;
+  padding: 0.75rem;
+  background-color: #f3f4f6;
+  border: 1px solid #d1d5db;
+  border-radius: 0.375rem;
+  font-family: 'Courier New', monospace;
+  font-size: 0.875rem;
+  color: #111827;
+  word-break: break-all;
+  margin: 0;
+}
+
+.copyButton {
+  padding: 0.5rem 1rem;
+  background-color: #6366f1;
+  color: white;
+  border: none;
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  white-space: nowrap;
+}
+
+.copyButton:hover {
+  background-color: #4f46e5;
+}
+
+.balance {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #059669;
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .card {
+    background-color: #1f2937;
+    border-color: #374151;
+  }
+
+  .header {
+    border-bottom-color: #374151;
+  }
+
+  .title {
+    color: #f3f4f6;
+  }
+
+  .network {
+    background-color: #1e3a8a;
+    color: #93c5fd;
+  }
+
+  .label {
+    color: #9ca3af;
+  }
+
+  .address {
+    background-color: #111827;
+    border-color: #374151;
+    color: #f3f4f6;
+  }
+
+  .balance {
+    color: #10b981;
+  }
+}
+
+@media (max-width: 640px) {
+  .card {
+    padding: 1rem;
+  }
+
+  .header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .addressContainer {
+    flex-direction: column;
+  }
+
+  .copyButton {
+    width: 100%;
+  }
+}
