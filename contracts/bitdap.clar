@@ -1,5 +1,5 @@
 ;; title: Bitdap Pass
-;; version: 0.5.0
+;; version: 1.1.0
 ;; summary: Bitdap Pass - tiered membership NFT collection with marketplace on Stacks.
 ;; description: >
 ;;   Bitdap Pass is a non-fungible token (NFT) collection that represents
