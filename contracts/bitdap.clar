@@ -651,6 +651,9 @@
             true
         )
         
+        ;; Additional safety checks
+        (asserts! (< (var-get next-token-id) u4294967295) ERR-OVERFLOW) ;; Prevent token ID overflow
+        
         (let (
             (current-total (var-get total-supply))
             (new-total (+ current-total u1))
