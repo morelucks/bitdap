@@ -366,12 +366,16 @@
     { owner: principal }
 )
 
-;; token-id -> metadata (tier and optional off-chain URI)
+;; Enhanced metadata with royalty and creator information
 (define-map token-metadata
     { token-id: uint }
     {
         tier: uint,
         uri: (optional (string-utf8 256)),
+        creator: principal,
+        royalty-percent: uint,
+        created-at: uint,
+        last-updated: uint
     }
 )
 
@@ -645,11 +649,15 @@
                     (recipient tx-sender)
                 )
                     (begin
-                        ;; Write ownership and metadata
+                        ;; Write ownership and metadata with enhanced fields
                         (map-set token-owners { token-id: token-id } { owner: recipient })
                         (map-set token-metadata { token-id: token-id } {
                             tier: tier,
                             uri: uri,
+                            creator: tx-sender,
+                            royalty-percent: u5, ;; Default 5% royalty
+                            created-at: stacks-block-height,
+                            last-updated: stacks-block-height
                         })
                         
                         ;; Update counters
