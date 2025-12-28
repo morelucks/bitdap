@@ -47,7 +47,8 @@
 (define-constant ERR-INVALID-FILTER (err u109))
 (define-constant ERR-SELF-TRANSFER (err u110))
 (define-constant ERR-INVALID-SIGNATURE (err u111))
-(define-constant ERR-INVALID-NONCE (err u112))
+(define-constant ERR-INVALID-METADATA (err u113))
+(define-constant ERR-EXPIRED-SIGNATURE (err u114))
 
 ;; Authorization Errors (200-299) - Permission and access control failures
 (define-constant ERR-UNAUTHORIZED (err u200))
