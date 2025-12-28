@@ -163,12 +163,18 @@
 (define-constant TIER-PRO u2)
 (define-constant TIER-VIP u3)
 
-;; Collection-wide and per-tier maximum supplies.
+;; Collection-wide and per-tier maximum supplies with dynamic adjustment capability.
 ;; These are conservative defaults that can be adjusted in future versions.
 (define-constant MAX-SUPPLY u10000)
 (define-constant MAX-BASIC-SUPPLY u7000)
 (define-constant MAX-PRO-SUPPLY u2500)
 (define-constant MAX-VIP-SUPPLY u500)
+
+;; Dynamic supply adjustment variables
+(define-data-var dynamic-max-supply uint MAX-SUPPLY)
+(define-data-var dynamic-basic-supply uint MAX-BASIC-SUPPLY)
+(define-data-var dynamic-pro-supply uint MAX-PRO-SUPPLY)
+(define-data-var dynamic-vip-supply uint MAX-VIP-SUPPLY)
 
 ;; data vars
 ;; - Global counters for token-ids and total supply.
