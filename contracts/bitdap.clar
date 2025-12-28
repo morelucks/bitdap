@@ -494,6 +494,22 @@
     }
 )
 
+;; Auction system for premium sales
+(define-map auctions
+    { auction-id: uint }
+    { 
+        token-id: uint, 
+        seller: principal, 
+        start-price: uint, 
+        current-bid: uint, 
+        highest-bidder: (optional principal),
+        end-block: uint,
+        active: bool 
+    }
+)
+
+(define-data-var next-auction-id uint u1)
+
 ;; Marketplace configuration
 (define-data-var next-offer-id uint u1)
 (define-data-var next-sale-id uint u1)
