@@ -158,6 +158,10 @@
     suggestion: u"Wait for contract to be unpaused by administrator"
 })
 
+;; Gas optimization constants
+(define-constant GAS-OPTIMIZED-BATCH-SIZE u50)
+(define-constant FAST-LOOKUP-CACHE-SIZE u100)
+
 ;; Tiers are represented as uints for compact on-chain storage.
 (define-constant TIER-BASIC u1)
 (define-constant TIER-PRO u2)
@@ -1293,7 +1297,7 @@
     )
 )
 
-;; Admin: update token URI (metadata)
+;; Admin: update token URI (metadata) with timestamp tracking
 (define-public (set-token-uri (token-id uint) (uri (optional (string-utf8 256))))
     (begin
         (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-UNAUTHORIZED)
@@ -1301,8 +1305,18 @@
             meta (begin
                 (map-set token-metadata { token-id: token-id } {
                     tier: (get tier meta),
-                    uri: uri
+                    uri: uri,
+                    creator: (get creator meta),
+                    royalty-percent: (get royalty-percent meta),
+                    created-at: (get created-at meta),
+                    last-updated: stacks-block-height
                 })
+                (print (tuple
+                    (event "metadata-updated")
+                    (token-id token-id)
+                    (updated-by tx-sender)
+                    (timestamp stacks-block-height)
+                ))
                 (ok true)
             )
             ERR-NOT-FOUND
