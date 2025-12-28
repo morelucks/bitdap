@@ -3601,3 +3601,23 @@
         ))
     )
 )
+
+;; Emergency recovery functions
+(define-public (emergency-recover-token (token-id uint) (new-owner principal))
+    (begin
+        (try! (validate-admin tx-sender))
+        (asserts! (var-get emergency-mode) ERR-MAINTENANCE-MODE)
+        (map-set token-owners { token-id: token-id } { owner: new-owner })
+        (ok true)
+    )
+)
+
+;; Contract upgrade preparation
+(define-public (prepare-upgrade (new-contract principal))
+    (begin
+        (try! (validate-admin tx-sender))
+        (var-set emergency-mode true)
+        (print (tuple (event "upgrade-prepared") (new-contract new-contract)))
+        (ok true)
+    )
+)
