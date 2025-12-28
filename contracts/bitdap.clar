@@ -2211,7 +2211,11 @@
                 meta (begin
                     (map-set token-metadata { token-id: token-id } {
                         tier: (get tier meta),
-                        uri: uri
+                        uri: uri,
+                        creator: (get creator meta),
+                        royalty-percent: (get royalty-percent meta),
+                        created-at: (get created-at meta),
+                        last-updated: stacks-block-height
                     })
                     (ok (+ success-count u1))
                 )
