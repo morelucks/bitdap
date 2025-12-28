@@ -617,6 +617,25 @@
 ;; public functions
 ;; - Core NFT operations: mint, transfer, burn.
 
+;; Bulk operations with gas optimization
+(define-public (optimized-bulk-mint (count uint) (tier uint))
+    (begin
+        (try! (validate-admin tx-sender))
+        (asserts! (<= count GAS-OPTIMIZED-BATCH-SIZE) ERR-MAX-BATCH-SIZE)
+        (bulk-mint-loop count tier u0)
+    )
+)
+
+(define-private (bulk-mint-loop (remaining uint) (tier uint) (minted uint))
+    (if (is-eq remaining u0)
+        (ok minted)
+        (match (mint-pass tier none)
+            success (bulk-mint-loop (- remaining u1) tier (+ minted u1))
+            error (ok minted)
+        )
+    )
+)
+
 ;; Mint a new Bitdap Pass NFT for the caller in the given tier.
 ;; - The recipient is always tx-sender for now; this keeps permissions simple:
 ;;   users can only mint passes for themselves.
