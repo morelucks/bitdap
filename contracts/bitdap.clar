@@ -187,6 +187,10 @@
 (define-constant MAX-PLATINUM-SUPPLY u100)
 (define-constant MAX-DIAMOND-SUPPLY u25)
 
+;; Time-locked minting for fairness
+(define-data-var mint-start-block uint u0)
+(define-data-var mint-end-block uint u0)
+
 ;; Tier upgrade system
 (define-data-var tier-upgrade-enabled bool true)
 (define-data-var upgrade-fee-basic-to-pro uint u1000000) ;; 1 STX
