@@ -232,6 +232,10 @@
 ;; MEV protection timestamp
 (define-data-var last-block-timestamp uint u0)
 
+;; Burn rewards system
+(define-data-var burn-rewards-enabled bool true)
+(define-data-var burn-reward-amount uint u100000) ;; 0.1 STX per burn
+
 ;; Counter for total transactions (mints, transfers, burns)
 (define-data-var transaction-count uint u0)
 
