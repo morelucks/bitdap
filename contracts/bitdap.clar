@@ -468,6 +468,14 @@
     }
 )
 
+;; Referral system for growth
+(define-map referrals
+    { referrer: principal, referee: principal }
+    { reward-claimed: bool, referral-date: uint }
+)
+
+(define-data-var referral-reward uint u500000) ;; 0.5 STX reward
+
 ;; Staking rewards for NFT holders
 (define-map staking-rewards
     { token-id: uint }
