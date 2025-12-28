@@ -871,6 +871,20 @@
     )
 )
 
+;; Governance voting power based on tier
+(define-read-only (get-voting-power (token-id uint))
+    (match (get-tier token-id)
+        ok-tier (if (is-eq ok-tier TIER-VIP)
+            (ok u100)
+            (if (is-eq ok-tier TIER-PRO)
+                (ok u50)
+                (ok u10) ;; Basic tier
+            )
+        )
+        error (err error)
+    )
+)
+
 ;; Returns the tier (Basic/Pro/VIP) for a given token-id.
 (define-read-only (get-tier (token-id uint))
     (match (map-get? token-metadata { token-id: token-id })
