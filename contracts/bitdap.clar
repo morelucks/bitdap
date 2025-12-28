@@ -180,6 +180,11 @@
 (define-constant MAX-PRO-SUPPLY u2500)
 (define-constant MAX-VIP-SUPPLY u500)
 
+;; Tier upgrade system
+(define-data-var tier-upgrade-enabled bool true)
+(define-data-var upgrade-fee-basic-to-pro uint u1000000) ;; 1 STX
+(define-data-var upgrade-fee-pro-to-vip uint u5000000) ;; 5 STX
+
 ;; Dynamic supply adjustment variables
 (define-data-var dynamic-max-supply uint MAX-SUPPLY)
 (define-data-var dynamic-basic-supply uint MAX-BASIC-SUPPLY)
