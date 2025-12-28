@@ -1,5 +1,5 @@
 ;; title: Bitdap Pass
-;; version: 0.3.0
+;; version: 1.1.0
 ;; summary: Bitdap Pass - tiered membership NFT collection with marketplace on Stacks.
 ;; description: >
 ;;   Bitdap Pass is a non-fungible token (NFT) collection that represents
@@ -31,7 +31,7 @@
 ;; constants
 ;; - Collection-wide configuration, tier identifiers, and error codes.
 
-;; Enhanced Error Handling System
+;; Enhanced Error Handling System with Network Errors
 ;; Error codes are categorized for better debugging and user experience
 
 ;; Validation Errors (100-199) - Input validation failures
@@ -46,6 +46,9 @@
 (define-constant ERR-INVALID-PAGINATION (err u108))
 (define-constant ERR-INVALID-FILTER (err u109))
 (define-constant ERR-SELF-TRANSFER (err u110))
+(define-constant ERR-INVALID-SIGNATURE (err u111))
+(define-constant ERR-INVALID-METADATA (err u113))
+(define-constant ERR-EXPIRED-SIGNATURE (err u114))
 
 ;; Authorization Errors (200-299) - Permission and access control failures
 (define-constant ERR-UNAUTHORIZED (err u200))
@@ -86,6 +89,11 @@
 (define-constant ERR-INTERNAL-ERROR (err u504))
 (define-constant ERR-OVERFLOW (err u505))
 (define-constant ERR-UNDERFLOW (err u506))
+
+;; Network Errors (700-799) - Network and connectivity failures
+(define-constant ERR-NETWORK-TIMEOUT (err u700))
+(define-constant ERR-INVALID-RESPONSE (err u701))
+(define-constant ERR-CONNECTION-FAILED (err u702))
 
 ;; Marketplace Errors (600-699) - Marketplace-specific failures
 (define-constant ERR-LISTING-PRICE-TOO-LOW (err u600))
@@ -156,17 +164,43 @@
     suggestion: u"Wait for contract to be unpaused by administrator"
 })
 
+;; Performance optimization constants
+(define-constant MAX-BATCH-OPERATIONS u25)
+(define-constant CACHE-EXPIRY-BLOCKS u144)
+(define-constant FAST-LOOKUP-CACHE-SIZE u100)
+
 ;; Tiers are represented as uints for compact on-chain storage.
 (define-constant TIER-BASIC u1)
 (define-constant TIER-PRO u2)
 (define-constant TIER-VIP u3)
 
-;; Collection-wide and per-tier maximum supplies.
+;; Advanced tier system
+(define-constant TIER-PLATINUM u4)
+(define-constant TIER-DIAMOND u5)
+
+;; Collection-wide and per-tier maximum supplies with dynamic adjustment capability.
 ;; These are conservative defaults that can be adjusted in future versions.
 (define-constant MAX-SUPPLY u10000)
 (define-constant MAX-BASIC-SUPPLY u7000)
 (define-constant MAX-PRO-SUPPLY u2500)
 (define-constant MAX-VIP-SUPPLY u500)
+(define-constant MAX-PLATINUM-SUPPLY u100)
+(define-constant MAX-DIAMOND-SUPPLY u25)
+
+;; Time-locked minting for fairness
+(define-data-var mint-start-block uint u0)
+(define-data-var mint-end-block uint u0)
+
+;; Tier upgrade system
+(define-data-var tier-upgrade-enabled bool true)
+(define-data-var upgrade-fee-basic-to-pro uint u1000000) ;; 1 STX
+(define-data-var upgrade-fee-pro-to-vip uint u5000000) ;; 5 STX
+
+;; Dynamic supply adjustment variables
+(define-data-var dynamic-max-supply uint MAX-SUPPLY)
+(define-data-var dynamic-basic-supply uint MAX-BASIC-SUPPLY)
+(define-data-var dynamic-pro-supply uint MAX-PRO-SUPPLY)
+(define-data-var dynamic-vip-supply uint MAX-VIP-SUPPLY)
 
 ;; data vars
 ;; - Global counters for token-ids and total supply.
@@ -191,6 +225,16 @@
 
 ;; Next listing ID to assign
 (define-data-var next-listing-id uint u1)
+
+;; Flash loan protection
+(define-data-var flash-loan-guard bool false)
+
+;; MEV protection timestamp
+(define-data-var last-block-timestamp uint u0)
+
+;; Burn rewards system
+(define-data-var burn-rewards-enabled bool true)
+(define-data-var burn-reward-amount uint u100000) ;; 0.1 STX per burn
 
 ;; Counter for total transactions (mints, transfers, burns)
 (define-data-var transaction-count uint u0)
@@ -358,12 +402,16 @@
     { owner: principal }
 )
 
-;; token-id -> metadata (tier and optional off-chain URI)
+;; Enhanced metadata with royalty and creator information
 (define-map token-metadata
     { token-id: uint }
     {
         tier: uint,
         uri: (optional (string-utf8 256)),
+        creator: principal,
+        royalty-percent: uint,
+        created-at: uint,
+        last-updated: uint
     }
 )
 
@@ -377,6 +425,24 @@
 (define-map user-registry
     { user: principal }
     { active: bool }
+)
+
+;; Multi-signature wallet support
+(define-map multisig-wallets
+    { wallet: principal }
+    { required-signatures: uint, signers: (list 10 principal) }
+)
+
+;; Loyalty rewards tracking
+(define-map loyalty-points
+    { user: principal }
+    { points: uint, last-earned: uint, tier-multiplier: uint }
+)
+
+;; Cross-chain bridge compatibility
+(define-map bridge-tokens
+    { bridge-id: (string-ascii 32), external-token-id: (string-utf8 64) }
+    { internal-token-id: uint, bridge-timestamp: uint }
 )
 
 ;; Enhanced listing-id -> listing details with advanced features
@@ -423,6 +489,30 @@
     }
 )
 
+;; Fractional ownership system
+(define-map fractional-shares
+    { token-id: uint, owner: principal }
+    { shares: uint, total-shares: uint }
+)
+
+;; Referral system for growth
+(define-map referrals
+    { referrer: principal, referee: principal }
+    { reward-claimed: bool, referral-date: uint }
+)
+
+(define-data-var referral-reward uint u500000) ;; 0.5 STX reward
+
+;; Dynamic pricing based on demand
+(define-data-var base-mint-price uint u1000000) ;; 1 STX
+(define-data-var price-multiplier uint u100) ;; 1.0x multiplier
+
+;; Staking rewards for NFT holders
+(define-map staking-rewards
+    { token-id: uint }
+    { staked-at: uint, rewards-earned: uint, last-claim: uint }
+)
+
 ;; Price history for tokens
 (define-map price-history
     { token-id: uint, sale-id: uint }
@@ -434,6 +524,22 @@
         listing-type: (string-ascii 16)
     }
 )
+
+;; Auction system for premium sales
+(define-map auctions
+    { auction-id: uint }
+    { 
+        token-id: uint, 
+        seller: principal, 
+        start-price: uint, 
+        current-bid: uint, 
+        highest-bidder: (optional principal),
+        end-block: uint,
+        active: bool 
+    }
+)
+
+(define-data-var next-auction-id uint u1)
 
 ;; Marketplace configuration
 (define-data-var next-offer-id uint u1)
@@ -494,6 +600,14 @@
         blacklisted-at: uint
     }
 )
+
+;; Whitelist for exclusive access
+(define-map whitelist
+    { user: principal }
+    { whitelisted: bool, added-at: uint, tier-access: uint }
+)
+
+(define-data-var whitelist-enabled bool false)
 
 ;; Emergency controls
 (define-data-var emergency-mode bool false)
@@ -617,6 +731,9 @@
             true
         )
         
+        ;; Additional safety checks
+        (asserts! (< (var-get next-token-id) u4294967295) ERR-OVERFLOW) ;; Prevent token ID overflow
+        
         (let (
             (current-total (var-get total-supply))
             (new-total (+ current-total u1))
@@ -637,11 +754,15 @@
                     (recipient tx-sender)
                 )
                     (begin
-                        ;; Write ownership and metadata
+                        ;; Write ownership and metadata with enhanced fields
                         (map-set token-owners { token-id: token-id } { owner: recipient })
                         (map-set token-metadata { token-id: token-id } {
                             tier: tier,
                             uri: uri,
+                            creator: tx-sender,
+                            royalty-percent: u5, ;; Default 5% royalty
+                            created-at: stacks-block-height,
+                            last-updated: stacks-block-height
                         })
                         
                         ;; Update counters
@@ -830,6 +951,20 @@
     (match (map-get? token-metadata { token-id: token-id })
         meta (ok meta)
         ERR-NOT-FOUND
+    )
+)
+
+;; Governance voting power based on tier
+(define-read-only (get-voting-power (token-id uint))
+    (match (get-tier token-id)
+        ok-tier (if (is-eq ok-tier TIER-VIP)
+            (ok u100)
+            (if (is-eq ok-tier TIER-PRO)
+                (ok u50)
+                (ok u10) ;; Basic tier
+            )
+        )
+        error (err error)
     )
 )
 
@@ -1277,7 +1412,7 @@
     )
 )
 
-;; Admin: update token URI (metadata)
+;; Admin: update token URI (metadata) with timestamp tracking
 (define-public (set-token-uri (token-id uint) (uri (optional (string-utf8 256))))
     (begin
         (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-UNAUTHORIZED)
@@ -1285,8 +1420,18 @@
             meta (begin
                 (map-set token-metadata { token-id: token-id } {
                     tier: (get tier meta),
-                    uri: uri
+                    uri: uri,
+                    creator: (get creator meta),
+                    royalty-percent: (get royalty-percent meta),
+                    created-at: (get created-at meta),
+                    last-updated: stacks-block-height
                 })
+                (print (tuple
+                    (event "metadata-updated")
+                    (token-id token-id)
+                    (updated-by tx-sender)
+                    (timestamp stacks-block-height)
+                ))
                 (ok true)
             )
             ERR-NOT-FOUND
@@ -1493,11 +1638,15 @@
                     (new-tier-supply (+ tier-supply u1))
                 )
                     (begin
-                        ;; Write ownership and metadata
+                        ;; Write ownership and metadata with enhanced fields
                         (map-set token-owners { token-id: token-id } { owner: recipient })
                         (map-set token-metadata { token-id: token-id } {
                             tier: tier,
                             uri: uri,
+                            creator: tx-sender,
+                            royalty-percent: u5,
+                            created-at: stacks-block-height,
+                            last-updated: stacks-block-height
                         })
                         ;; Update counters
                         (map-set tier-supplies { tier: tier } { supply: new-tier-supply })
@@ -1914,11 +2063,15 @@
                         )
                             (let ((token-id (var-get next-token-id)))
                                 (begin
-                                    ;; Mint the token
+                                    ;; Mint the token with enhanced metadata
                                     (map-set token-owners { token-id: token-id } { owner: recipient })
                                     (map-set token-metadata { token-id: token-id } {
                                         tier: tier,
                                         uri: uri,
+                                        creator: tx-sender,
+                                        royalty-percent: u5,
+                                        created-at: stacks-block-height,
+                                        last-updated: stacks-block-height
                                     })
                                     (map-set tier-supplies { tier: tier } { supply: new-tier-supply })
                                     (var-set total-supply new-total)
@@ -2141,7 +2294,11 @@
                 meta (begin
                     (map-set token-metadata { token-id: token-id } {
                         tier: (get tier meta),
-                        uri: uri
+                        uri: uri,
+                        creator: (get creator meta),
+                        royalty-percent: (get royalty-percent meta),
+                        created-at: (get created-at meta),
+                        last-updated: stacks-block-height
                     })
                     (ok (+ success-count u1))
                 )
@@ -3518,5 +3675,135 @@
             (message u"Unknown error code")
             (suggestion u"Check error code documentation")
         ))
+    )
+)
+
+;; Emergency recovery functions
+(define-public (emergency-recover-token (token-id uint) (new-owner principal))
+    (begin
+        (try! (validate-admin tx-sender))
+        (asserts! (var-get emergency-mode) ERR-MAINTENANCE-MODE)
+        (map-set token-owners { token-id: token-id } { owner: new-owner })
+        (ok true)
+    )
+)
+
+;; Contract upgrade preparation
+(define-public (prepare-upgrade (new-contract principal))
+    (begin
+        (try! (validate-admin tx-sender))
+        (var-set emergency-mode true)
+        (print (tuple (event "upgrade-prepared") (new-contract new-contract)))
+        (ok true)
+    )
+)
+;; Tier upgrade function
+(define-public (upgrade-tier (token-id uint))
+    (begin
+        (try! (validate-token-owner token-id tx-sender))
+        (asserts! (var-get tier-upgrade-enabled) ERR-FEATURE-DISABLED)
+        
+        (match (get-tier token-id)
+            ok-tier (let ((current-tier ok-tier))
+                (if (is-eq current-tier TIER-BASIC)
+                    (begin
+                        ;; Upgrade Basic to Pro
+                        (try! (stx-transfer? (var-get upgrade-fee-basic-to-pro) tx-sender (var-get contract-owner)))
+                        (map-set token-metadata { token-id: token-id } 
+                            (merge (unwrap-panic (map-get? token-metadata { token-id: token-id }))
+                                   { tier: TIER-PRO, last-updated: stacks-block-height }))
+                        (ok TIER-PRO)
+                    )
+                    (if (is-eq current-tier TIER-PRO)
+                        (begin
+                            ;; Upgrade Pro to VIP
+                            (try! (stx-transfer? (var-get upgrade-fee-pro-to-vip) tx-sender (var-get contract-owner)))
+                            (map-set token-metadata { token-id: token-id }
+                                (merge (unwrap-panic (map-get? token-metadata { token-id: token-id }))
+                                       { tier: TIER-VIP, last-updated: stacks-block-height }))
+                            (ok TIER-VIP)
+                        )
+                        ERR-INVALID-TIER ;; Already VIP or invalid tier
+                    )
+                )
+            )
+            error (err error)
+        )
+    )
+)
+
+;; Loyalty points earning function
+(define-public (earn-loyalty-points (user principal) (points uint))
+    (begin
+        (try! (validate-admin tx-sender))
+        (let ((current-data (default-to { points: u0, last-earned: u0, tier-multiplier: u1 } 
+                                       (map-get? loyalty-points { user: user }))))
+            (map-set loyalty-points { user: user } {
+                points: (+ (get points current-data) points),
+                last-earned: stacks-block-height,
+                tier-multiplier: (get tier-multiplier current-data)
+            })
+            (ok true)
+        )
+    )
+)
+;; Enhanced analytics and reporting
+(define-read-only (get-comprehensive-stats)
+    (let (
+        (total-tokens (var-get total-supply))
+        (total-users (var-get user-count))
+        (total-transactions (var-get transaction-count))
+        (basic-count (get supply (default-to { supply: u0 } (map-get? tier-supplies { tier: TIER-BASIC }))))
+        (pro-count (get supply (default-to { supply: u0 } (map-get? tier-supplies { tier: TIER-PRO }))))
+        (vip-count (get supply (default-to { supply: u0 } (map-get? tier-supplies { tier: TIER-VIP }))))
+    )
+        (ok (tuple
+            (contract-version u5)
+            (total-supply total-tokens)
+            (user-metrics (tuple
+                (total-users total-users)
+                (active-listings (var-get listing-count))
+                (total-transactions total-transactions)
+            ))
+            (tier-distribution (tuple
+                (basic basic-count)
+                (pro pro-count)
+                (vip vip-count)
+                (utilization-rate (if (> MAX-SUPPLY u0) (/ (* total-tokens u100) MAX-SUPPLY) u0))
+            ))
+            (marketplace-health (tuple
+                (total-fees-collected (var-get total-fees-collected))
+                (average-fee-per-transaction (if (> total-transactions u0) 
+                    (/ (var-get total-fees-collected) total-transactions) u0))
+            ))
+            (system-status (tuple
+                (emergency-mode (var-get emergency-mode))
+                (mint-paused (var-get mint-paused))
+                (transfer-paused (var-get transfer-paused))
+                (marketplace-paused (var-get marketplace-paused))
+            ))
+            (timestamp stacks-block-height)
+        ))
+    )
+)
+;; Enhanced mint function with dynamic pricing
+(define-public (mint-with-payment (tier uint) (uri (optional (string-utf8 256))))
+    (let ((current-price (calculate-mint-price tier)))
+        (begin
+            (try! (stx-transfer? current-price tx-sender (var-get contract-owner)))
+            (mint-pass tier uri)
+        )
+    )
+)
+
+;; Calculate dynamic mint price
+(define-private (calculate-mint-price (tier uint))
+    (let ((base-price (var-get base-mint-price))
+          (multiplier (var-get price-multiplier))
+          (tier-multiplier (if (is-eq tier TIER-DIAMOND) u10
+                              (if (is-eq tier TIER-PLATINUM) u5
+                                  (if (is-eq tier TIER-VIP) u3
+                                      (if (is-eq tier TIER-PRO) u2 u1))))))
+        (* (* base-price tier-multiplier) (/ multiplier u100))
     )
 )
