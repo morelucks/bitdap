@@ -412,6 +412,12 @@
     { active: bool }
 )
 
+;; Loyalty rewards tracking
+(define-map loyalty-points
+    { user: principal }
+    { points: uint, last-earned: uint, tier-multiplier: uint }
+)
+
 ;; Cross-chain bridge compatibility
 (define-map bridge-tokens
     { bridge-id: (string-ascii 32), external-token-id: (string-utf8 64) }
