@@ -401,6 +401,12 @@
     { active: bool }
 )
 
+;; Cross-chain bridge compatibility
+(define-map bridge-tokens
+    { bridge-id: (string-ascii 32), external-token-id: (string-utf8 64) }
+    { internal-token-id: uint, bridge-timestamp: uint }
+)
+
 ;; Enhanced listing-id -> listing details with advanced features
 (define-map marketplace-listings
     { listing-id: uint }
