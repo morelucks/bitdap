@@ -174,6 +174,10 @@
 (define-constant TIER-PRO u2)
 (define-constant TIER-VIP u3)
 
+;; Advanced tier system
+(define-constant TIER-PLATINUM u4)
+(define-constant TIER-DIAMOND u5)
+
 ;; Collection-wide and per-tier maximum supplies with dynamic adjustment capability.
 ;; These are conservative defaults that can be adjusted in future versions.
 (define-constant MAX-SUPPLY u10000)
