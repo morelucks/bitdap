@@ -1980,11 +1980,15 @@
                         )
                             (let ((token-id (var-get next-token-id)))
                                 (begin
-                                    ;; Mint the token
+                                    ;; Mint the token with enhanced metadata
                                     (map-set token-owners { token-id: token-id } { owner: recipient })
                                     (map-set token-metadata { token-id: token-id } {
                                         tier: tier,
                                         uri: uri,
+                                        creator: tx-sender,
+                                        royalty-percent: u5,
+                                        created-at: stacks-block-height,
+                                        last-updated: stacks-block-height
                                     })
                                     (map-set tier-supplies { tier: tier } { supply: new-tier-supply })
                                     (var-set total-supply new-total)
