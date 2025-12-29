@@ -1973,3 +1973,71 @@ describe("Bitdap Multi Token - Enhanced Token Creation with Royalties", () => {
     expect(result).toBeErr(Cl.uint(412)); // ERR-INVALID-ROYALTY
   });
 });
+describe("Bitdap Multi Token - Max Supply Validation", () => {
+  beforeEach(() => {
+    // Create token with max supply
+    simnet.callPublicFn(
+      contractName,
+      "create-token",
+      [
+        Cl.stringUtf8("Limited Token"),
+        Cl.stringUtf8("LTD"),
+        Cl.uint(18),
+        Cl.bool(true),
+        Cl.none(),
+        Cl.some(Cl.uint(5000)), // max supply of 5000
+        Cl.none(),
+        Cl.uint(0)
+      ],
+      deployer
+    );
+  });
+
+  it("should allow minting within max supply", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(wallet1), Cl.uint(1), Cl.uint(3000)],
+      deployer
+    );
+    expect(result).toBeOk(Cl.bool(true));
+
+    // Check total supply
+    const supplyResult = simnet.callReadOnlyFn(
+      contractName,
+      "get-total-supply",
+      [Cl.uint(1)],
+      deployer
+    );
+    expect(supplyResult.result).toBeOk(Cl.uint(3000));
+  });
+
+  it("should reject minting beyond max supply", () => {
+    // First mint up to near limit
+    simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(wallet1), Cl.uint(1), Cl.uint(4500)],
+      deployer
+    );
+
+    // Try to mint beyond max supply
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(wallet2), Cl.uint(1), Cl.uint(1000)], // Would exceed 5000
+      deployer
+    );
+    expect(result).toBeErr(Cl.uint(415)); // ERR-MAX-SUPPLY-EXCEEDED
+  });
+
+  it("should allow exact max supply minting", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(wallet1), Cl.uint(1), Cl.uint(5000)], // Exact max
+      deployer
+    );
+    expect(result).toBeOk(Cl.bool(true));
+  });
+});
