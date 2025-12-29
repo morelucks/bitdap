@@ -36,6 +36,7 @@
 (define-data-var contract-owner principal CONTRACT-OWNER)
 (define-data-var contract-paused bool false)
 (define-data-var next-token-id uint u1)
+(define-data-var emergency-admin (optional principal) none)
 
 ;; Data maps
 ;; token-id -> token metadata
@@ -46,8 +47,10 @@
         symbol: (string-utf8 16),
         decimals: uint,
         total-supply: uint,
+        max-supply: (optional uint),
         is-fungible: bool,
-        uri: (optional (string-utf8 256))
+        uri: (optional (string-utf8 256)),
+        creator: principal
     }
 )
 
@@ -60,13 +63,25 @@
 ;; owner -> operator -> approved (for all tokens)
 (define-map operator-approvals
     { owner: principal, operator: principal }
-    { approved: bool }
+    { approved: bool, expires-at: (optional uint) }
 )
 
 ;; owner -> spender -> token-id -> allowance
 (define-map token-allowances
     { owner: principal, spender: principal, token-id: uint }
     { allowance: uint }
+)
+
+;; Role-based access control
+(define-map user-roles
+    { user: principal, role: uint }
+    { assigned: bool }
+)
+
+;; Royalty information
+(define-map token-royalties
+    { token-id: uint }
+    { recipient: principal, percentage: uint }
 )
 
 ;; Read-only functions
