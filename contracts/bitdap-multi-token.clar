@@ -375,22 +375,36 @@
     { token-id: a, amount: b }
 )
 
-;; Transfer tokens from sender to recipient
+;; Transfer tokens from sender to recipient with improved authorization
 (define-public (transfer-from (from principal) (to principal) (token-id uint) (amount uint))
     (begin
         (asserts! (not (var-get contract-paused)) ERR-CONTRACT-PAUSED)
         (asserts! (> amount u0) ERR-INVALID-AMOUNT)
         (asserts! (not (is-eq from to)) ERR-SELF-TRANSFER)
-        (asserts! (is-eq from tx-sender) ERR-UNAUTHORIZED) ;; For now, only owner can transfer their tokens
+        
+        ;; Check authorization - owner, approved operator, or sufficient allowance
+        (asserts! (or 
+            (is-eq from tx-sender)
+            (unwrap-panic (is-approved-for-all from tx-sender))
+            (>= (unwrap-panic (get-allowance from tx-sender token-id)) amount)
+        ) ERR-UNAUTHORIZED)
         
         ;; Check if token exists
         (match (map-get? token-metadata { token-id: token-id })
             metadata (let (
                 (from-balance (default-to u0 (get balance (map-get? balances { account: from, token-id: token-id }))))
                 (to-balance (default-to u0 (get balance (map-get? balances { account: to, token-id: token-id }))))
+                (current-allowance (unwrap-panic (get-allowance from tx-sender token-id)))
             )
                 ;; Check sufficient balance
                 (asserts! (>= from-balance amount) ERR-INSUFFICIENT-BALANCE)
+                
+                ;; Update allowance if using allowance-based transfer
+                (if (and (not (is-eq from tx-sender)) (not (unwrap-panic (is-approved-for-all from tx-sender))))
+                    (map-set token-allowances { owner: from, spender: tx-sender, token-id: token-id } 
+                        { allowance: (- current-allowance amount) })
+                    true
+                )
                 
                 ;; Update balances
                 (map-set balances { account: from, token-id: token-id } { balance: (- from-balance amount) })
@@ -402,7 +416,8 @@
                     from: from,
                     to: to,
                     token-id: token-id,
-                    amount: amount
+                    amount: amount,
+                    operator: tx-sender
                 })
                 
                 (ok true)
