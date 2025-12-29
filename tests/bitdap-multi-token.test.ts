@@ -2306,3 +2306,61 @@ describe("Bitdap Multi Token - Enhanced Batch Operations", () => {
     }));
   });
 });
+describe("Bitdap Multi Token - Batch Balance Queries", () => {
+  beforeEach(() => {
+    // Setup tokens and balances for batch queries
+    for (let i = 1; i <= 3; i++) {
+      simnet.callPublicFn(
+        contractName,
+        "create-token",
+        [
+          Cl.stringUtf8(`Query Token ${i}`),
+          Cl.stringUtf8(`QT${i}`),
+          Cl.uint(18),
+          Cl.bool(true),
+          Cl.none(),
+          Cl.none(),
+          Cl.none(),
+          Cl.uint(0)
+        ],
+        deployer
+      );
+      simnet.callPublicFn(
+        contractName,
+        "mint",
+        [Cl.principal(wallet1), Cl.uint(i), Cl.uint(i * 1000)],
+        deployer
+      );
+    }
+  });
+
+  it("should return batch balances correctly", () => {
+    const tokenIds = [1, 2, 3];
+    const balanceResult = simnet.callReadOnlyFn(
+      contractName,
+      "get-balance-batch",
+      [Cl.principal(wallet1), Cl.list(tokenIds.map(id => Cl.uint(id)))],
+      deployer
+    );
+    
+    // Should return list of balances [1000, 2000, 3000]
+    expect(balanceResult.result).toBeOk(
+      Cl.list([Cl.uint(1000), Cl.uint(2000), Cl.uint(3000)])
+    );
+  });
+
+  it("should handle batch token existence checks", () => {
+    const tokenIds = [1, 2, 3, 999]; // 999 doesn't exist
+    const existsResult = simnet.callReadOnlyFn(
+      contractName,
+      "tokens-exist-batch",
+      [Cl.list(tokenIds.map(id => Cl.uint(id)))],
+      deployer
+    );
+    
+    // Should return [true, true, true, false]
+    expect(existsResult.result).toBeOk(
+      Cl.list([Cl.bool(true), Cl.bool(true), Cl.bool(true), Cl.bool(false)])
+    );
+  });
+});
