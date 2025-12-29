@@ -336,32 +336,53 @@
     )
 )
 
-;; Helper function for batch minting
+;; Helper function for batch minting with improved validation
 (define-private (batch-mint-helper 
     (item { token-id: uint, amount: uint })
-    (acc (response bool uint))
+    (acc (response { to: principal, success: bool } uint))
 )
     (match acc
-        success (let (
+        success-data (let (
             (token-id (get token-id item))
             (amount (get amount item))
+            (to (get to success-data))
         )
             (if (> amount u0)
                 (match (map-get? token-metadata { token-id: token-id })
                     metadata (let (
-                        (current-balance (default-to u0 (get balance (map-get? balances { account: tx-sender, token-id: token-id }))))
+                        (current-balance (default-to u0 (get balance (map-get? balances { account: to, token-id: token-id }))))
                         (new-balance (+ current-balance amount))
                         (current-supply (get total-supply metadata))
                         (new-supply (+ current-supply amount))
+                        (max-supply (get max-supply metadata))
                     )
-                        ;; Update balance and supply
-                        (map-set balances { account: tx-sender, token-id: token-id } { balance: new-balance })
-                        (map-set token-metadata { token-id: token-id } (merge metadata { total-supply: new-supply }))
-                        (ok true)
+                        ;; Check max supply constraint
+                        (if (or 
+                            (is-none max-supply)
+                            (<= new-supply (unwrap-panic max-supply))
+                        )
+                            (begin
+                                ;; Update balance and supply
+                                (map-set balances { account: to, token-id: token-id } { balance: new-balance })
+                                (map-set token-metadata { token-id: token-id } (merge metadata { total-supply: new-supply }))
+                                
+                                ;; Emit batch mint event
+                                (print {
+                                    action: "batch-mint",
+                                    to: to,
+                                    token-id: token-id,
+                                    amount: amount,
+                                    minter: tx-sender
+                                })
+                                
+                                (ok success-data)
+                            )
+                            ERR-MAX-SUPPLY-EXCEEDED
+                        )
                     )
                     ERR-TOKEN-NOT-EXISTS
                 )
-                (ok true)
+                (ok success-data)
             )
         )
         error error
