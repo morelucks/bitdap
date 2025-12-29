@@ -789,3 +789,69 @@
         ERR-TOKEN-NOT-EXISTS
     )
 )
+
+;; Emergency pause/unpause functions
+(define-public (pause-contract)
+    (begin
+        (asserts! (or 
+            (is-eq tx-sender (var-get contract-owner))
+            (is-some (var-get emergency-admin))
+        ) ERR-UNAUTHORIZED)
+        
+        (var-set contract-paused true)
+        
+        (print {
+            action: "pause-contract",
+            pauser: tx-sender,
+            timestamp: block-height
+        })
+        
+        (ok true)
+    )
+)
+
+(define-public (unpause-contract)
+    (begin
+        (asserts! (or 
+            (is-eq tx-sender (var-get contract-owner))
+            (is-some (var-get emergency-admin))
+        ) ERR-UNAUTHORIZED)
+        
+        (var-set contract-paused false)
+        
+        (print {
+            action: "unpause-contract",
+            unpauser: tx-sender,
+            timestamp: block-height
+        })
+        
+        (ok true)
+    )
+)
+
+;; Calculate royalty fee for a sale
+(define-read-only (calculate-royalty-fee (token-id uint) (sale-price uint))
+    (match (map-get? token-royalties { token-id: token-id })
+        royalty-info (let (
+            (percentage (get percentage royalty-info))
+            (fee (/ (* sale-price percentage) u10000))
+        )
+            (ok { recipient: (get recipient royalty-info), fee: fee })
+        )
+        (ok { recipient: (var-get contract-owner), fee: u0 })
+    )
+)
+
+;; Get tokens by type (fungible or non-fungible)
+(define-read-only (get-tokens-by-type (is-fungible bool) (offset uint) (limit uint))
+    (ok (list)) ;; Simplified - would need iteration in full implementation
+)
+
+;; Batch token existence check
+(define-read-only (tokens-exist-batch (token-ids (list 20 uint)))
+    (ok (map token-exists-helper token-ids))
+)
+
+(define-private (token-exists-helper (token-id uint))
+    (is-some (map-get? token-metadata { token-id: token-id }))
+)
