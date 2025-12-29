@@ -470,16 +470,21 @@
     )
 )
 
-;; Batch transfer multiple tokens from sender to recipient
+;; Batch transfer multiple tokens from sender to recipient with atomic execution
 (define-public (batch-transfer-from (from principal) (to principal) (token-ids (list 10 uint)) (amounts (list 10 uint)))
     (begin
         (asserts! (not (var-get contract-paused)) ERR-CONTRACT-PAUSED)
         (asserts! (not (is-eq from to)) ERR-SELF-TRANSFER)
-        (asserts! (is-eq from tx-sender) ERR-UNAUTHORIZED)
-        (asserts! (is-eq (len token-ids) (len amounts)) ERR-INVALID-AMOUNT)
+        (asserts! (is-eq (len token-ids) (len amounts)) ERR-BATCH-LENGTH-MISMATCH)
         
-        ;; Process each token-amount pair
-        (fold batch-transfer-helper (zip token-ids amounts) (ok { from: from, to: to }))
+        ;; Check authorization
+        (asserts! (or 
+            (is-eq from tx-sender)
+            (unwrap-panic (is-approved-for-all from tx-sender))
+        ) ERR-UNAUTHORIZED)
+        
+        ;; Process each token-amount pair atomically
+        (fold batch-transfer-helper (zip token-ids amounts) (ok { from: from, to: to, operator: tx-sender }))
     )
 )
 
