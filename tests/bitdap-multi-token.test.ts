@@ -3081,3 +3081,176 @@ describe("Bitdap Multi Token - Integration with All New Features", () => {
     );
   });
 });
+describe("Bitdap Multi Token - Performance and Stress Testing", () => {
+  it("should handle multiple role assignments efficiently", () => {
+    const roles = [ROLE_ADMIN, ROLE_MINTER, ROLE_BURNER, ROLE_METADATA_MANAGER];
+    const wallets = [wallet1, wallet2, wallet3, wallet4, wallet5];
+
+    // Grant multiple roles to multiple users
+    wallets.forEach((wallet, walletIndex) => {
+      roles.forEach((role, roleIndex) => {
+        if ((walletIndex + roleIndex) % 2 === 0) { // Grant some roles
+          const { result } = simnet.callPublicFn(
+            contractName,
+            "grant-role",
+            [Cl.principal(wallet), Cl.uint(role)],
+            deployer
+          );
+          expect(result).toBeOk(Cl.bool(true));
+        }
+      });
+    });
+
+    // Verify role assignments
+    wallets.forEach((wallet, walletIndex) => {
+      roles.forEach((role, roleIndex) => {
+        const hasRoleResult = simnet.callReadOnlyFn(
+          contractName,
+          "has-role",
+          [Cl.principal(wallet), Cl.uint(role)],
+          deployer
+        );
+        const expectedHasRole = (walletIndex + roleIndex) % 2 === 0;
+        expect(hasRoleResult.result).toBeOk(Cl.bool(expectedHasRole));
+      });
+    });
+  });
+
+  it("should handle large batch operations with max supply constraints", () => {
+    // Create tokens with different max supplies
+    const tokenConfigs = [
+      { maxSupply: 1000, name: "Small Token", symbol: "SM" },
+      { maxSupply: 50000, name: "Medium Token", symbol: "MD" },
+      { maxSupply: 1000000, name: "Large Token", symbol: "LG" }
+    ];
+
+    tokenConfigs.forEach((config, index) => {
+      const { result } = simnet.callPublicFn(
+        contractName,
+        "create-token",
+        [
+          Cl.stringUtf8(config.name),
+          Cl.stringUtf8(config.symbol),
+          Cl.uint(18),
+          Cl.bool(true),
+          Cl.none(),
+          Cl.some(Cl.uint(config.maxSupply)),
+          Cl.none(),
+          Cl.uint(0)
+        ],
+        deployer
+      );
+      expect(result).toBeOk(Cl.uint(index + 1));
+    });
+
+    // Batch mint respecting max supplies
+    const tokenIds = [1, 2, 3];
+    const amounts = [500, 25000, 500000]; // Within max supplies
+
+    const { result: batchResult } = simnet.callPublicFn(
+      contractName,
+      "batch-mint",
+      [
+        Cl.principal(wallet1),
+        Cl.list(tokenIds.map(id => Cl.uint(id))),
+        Cl.list(amounts.map(amt => Cl.uint(amt)))
+      ],
+      deployer
+    );
+    expect(batchResult).toBeOk(Cl.tuple({ to: Cl.principal(wallet1), success: Cl.bool(true) }));
+
+    // Verify all balances
+    tokenIds.forEach((tokenId, index) => {
+      const balanceResult = simnet.callReadOnlyFn(
+        contractName,
+        "get-balance",
+        [Cl.principal(wallet1), Cl.uint(tokenId)],
+        deployer
+      );
+      expect(balanceResult.result).toBeOk(Cl.uint(amounts[index]));
+    });
+  });
+
+  it("should maintain consistency under concurrent-like operations", () => {
+    // Create token for consistency testing
+    simnet.callPublicFn(
+      contractName,
+      "create-token",
+      [
+        Cl.stringUtf8("Consistency Token"),
+        Cl.stringUtf8("CONS"),
+        Cl.uint(18),
+        Cl.bool(true),
+        Cl.none(),
+        Cl.none(),
+        Cl.none(),
+        Cl.uint(0)
+      ],
+      deployer
+    );
+
+    // Simulate multiple operations that should maintain balance consistency
+    const operations = [
+      { type: "mint", to: wallet1, amount: 5000 },
+      { type: "mint", to: wallet2, amount: 3000 },
+      { type: "transfer", from: wallet1, to: wallet3, amount: 1000 },
+      { type: "transfer", from: wallet2, to: wallet3, amount: 500 },
+      { type: "burn", from: wallet1, amount: 500 },
+      { type: "burn", from: wallet2, amount: 300 }
+    ];
+
+    let expectedBalances = { [wallet1]: 0, [wallet2]: 0, [wallet3]: 0 };
+    let expectedTotalSupply = 0;
+
+    operations.forEach(op => {
+      if (op.type === "mint") {
+        simnet.callPublicFn(
+          contractName,
+          "mint",
+          [Cl.principal(op.to), Cl.uint(1), Cl.uint(op.amount)],
+          deployer
+        );
+        expectedBalances[op.to] += op.amount;
+        expectedTotalSupply += op.amount;
+      } else if (op.type === "transfer") {
+        simnet.callPublicFn(
+          contractName,
+          "transfer-from",
+          [Cl.principal(op.from), Cl.principal(op.to), Cl.uint(1), Cl.uint(op.amount)],
+          op.from
+        );
+        expectedBalances[op.from] -= op.amount;
+        expectedBalances[op.to] += op.amount;
+      } else if (op.type === "burn") {
+        simnet.callPublicFn(
+          contractName,
+          "burn",
+          [Cl.principal(op.from), Cl.uint(1), Cl.uint(op.amount)],
+          op.from
+        );
+        expectedBalances[op.from] -= op.amount;
+        expectedTotalSupply -= op.amount;
+      }
+    });
+
+    // Verify final balances match expectations
+    [wallet1, wallet2, wallet3].forEach(wallet => {
+      const balanceResult = simnet.callReadOnlyFn(
+        contractName,
+        "get-balance",
+        [Cl.principal(wallet), Cl.uint(1)],
+        deployer
+      );
+      expect(balanceResult.result).toBeOk(Cl.uint(expectedBalances[wallet]));
+    });
+
+    // Verify total supply
+    const supplyResult = simnet.callReadOnlyFn(
+      contractName,
+      "get-total-supply",
+      [Cl.uint(1)],
+      deployer
+    );
+    expect(supplyResult.result).toBeOk(Cl.uint(expectedTotalSupply));
+  });
+});
