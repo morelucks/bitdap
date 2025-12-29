@@ -124,6 +124,29 @@
     (ok (is-some (map-get? token-metadata { token-id: token-id })))
 )
 
+;; Check if user has role
+(define-read-only (has-role (user principal) (role uint))
+    (ok (default-to false (get assigned (map-get? user-roles { user: user, role: role }))))
+)
+
+;; Get royalty info for token
+(define-read-only (get-royalty-info (token-id uint))
+    (match (map-get? token-royalties { token-id: token-id })
+        royalty-info (ok royalty-info)
+        (ok { recipient: (var-get contract-owner), percentage: u0 })
+    )
+)
+
+;; Get multiple balances at once
+(define-read-only (get-balance-batch (account principal) (token-ids (list 20 uint)))
+    (ok (map get-balance-helper token-ids))
+)
+
+;; Helper for batch balance queries
+(define-private (get-balance-helper (token-id uint))
+    (default-to u0 (get balance (map-get? balances { account: tx-sender, token-id: token-id })))
+)
+
 ;; Public functions
 
 ;; Create a new token type (only owner)
