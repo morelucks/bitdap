@@ -2041,3 +2041,95 @@ describe("Bitdap Multi Token - Max Supply Validation", () => {
     expect(result).toBeOk(Cl.bool(true));
   });
 });
+describe("Bitdap Multi Token - Emergency Controls", () => {
+  it("should set emergency admin successfully", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "set-emergency-admin",
+      [Cl.principal(wallet4)],
+      deployer
+    );
+    expect(result).toBeOk(Cl.bool(true));
+  });
+
+  it("should pause and unpause contract", () => {
+    // Set emergency admin first
+    simnet.callPublicFn(
+      contractName,
+      "set-emergency-admin",
+      [Cl.principal(wallet4)],
+      deployer
+    );
+
+    // Pause contract
+    const { result: pauseResult } = simnet.callPublicFn(
+      contractName,
+      "pause-contract",
+      [],
+      deployer
+    );
+    expect(pauseResult).toBeOk(Cl.bool(true));
+
+    // Check paused status
+    const pausedResult = simnet.callReadOnlyFn(
+      contractName,
+      "is-paused",
+      [],
+      deployer
+    );
+    expect(pausedResult.result).toBeOk(Cl.bool(true));
+
+    // Unpause contract
+    const { result: unpauseResult } = simnet.callPublicFn(
+      contractName,
+      "unpause-contract",
+      [],
+      deployer
+    );
+    expect(unpauseResult).toBeOk(Cl.bool(true));
+
+    // Check unpaused status
+    const unpausedResult = simnet.callReadOnlyFn(
+      contractName,
+      "is-paused",
+      [],
+      deployer
+    );
+    expect(unpausedResult.result).toBeOk(Cl.bool(false));
+  });
+
+  it("should reject operations when paused", () => {
+    // Create and pause
+    simnet.callPublicFn(
+      contractName,
+      "create-token",
+      [
+        Cl.stringUtf8("Pause Test"),
+        Cl.stringUtf8("PAUSE"),
+        Cl.uint(18),
+        Cl.bool(true),
+        Cl.none(),
+        Cl.none(),
+        Cl.none(),
+        Cl.uint(0)
+      ],
+      deployer
+    );
+    
+    simnet.callPublicFn(
+      contractName,
+      "pause-contract",
+      [],
+      deployer
+    );
+
+    // Try to mint while paused
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(wallet1), Cl.uint(1), Cl.uint(1000)],
+      deployer
+    );
+    expect(result).toBeErr(Cl.uint(407)); // ERR-CONTRACT-PAUSED
+  });
+});
