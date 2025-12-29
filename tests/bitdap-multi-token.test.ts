@@ -2435,3 +2435,53 @@ describe("Bitdap Multi Token - Emergency Recovery", () => {
     expect(result).toBeErr(Cl.uint(401)); // ERR-UNAUTHORIZED
   });
 });
+describe("Bitdap Multi Token - Contract Info and Version", () => {
+  it("should return comprehensive contract information", () => {
+    const infoResult = simnet.callReadOnlyFn(
+      contractName,
+      "get-contract-info",
+      [],
+      deployer
+    );
+    
+    expect(infoResult.result).toBeOk(
+      Cl.tuple({
+        name: Cl.stringAscii("Bitdap Multi Token"),
+        version: Cl.stringAscii("2.0.0"),
+        owner: Cl.principal(deployer),
+        paused: Cl.bool(false),
+        "next-token-id": Cl.uint(1),
+        "emergency-admin": Cl.none()
+      })
+    );
+  });
+
+  it("should show updated info after emergency admin is set", () => {
+    // Set emergency admin
+    simnet.callPublicFn(
+      contractName,
+      "set-emergency-admin",
+      [Cl.principal(wallet4)],
+      deployer
+    );
+
+    const infoResult = simnet.callReadOnlyFn(
+      contractName,
+      "get-contract-info",
+      [],
+      deployer
+    );
+    
+    const info = infoResult.result;
+    expect(info).toBeOk(
+      Cl.tuple({
+        name: Cl.stringAscii("Bitdap Multi Token"),
+        version: Cl.stringAscii("2.0.0"),
+        owner: Cl.principal(deployer),
+        paused: Cl.bool(false),
+        "next-token-id": Cl.uint(1),
+        "emergency-admin": Cl.some(Cl.principal(wallet4))
+      })
+    );
+  });
+});
