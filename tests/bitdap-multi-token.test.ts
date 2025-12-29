@@ -2664,3 +2664,113 @@ describe("Bitdap Multi Token - Metadata Manager Role", () => {
     expect(result).toBeErr(Cl.uint(401)); // ERR-UNAUTHORIZED
   });
 });
+describe("Bitdap Multi Token - Enhanced Transfer Authorization", () => {
+  beforeEach(() => {
+    // Setup tokens and balances for transfer tests
+    simnet.callPublicFn(
+      contractName,
+      "create-token",
+      [
+        Cl.stringUtf8("Transfer Test Token"),
+        Cl.stringUtf8("TTT"),
+        Cl.uint(18),
+        Cl.bool(true),
+        Cl.none(),
+        Cl.none(),
+        Cl.none(),
+        Cl.uint(0)
+      ],
+      deployer
+    );
+    
+    simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(wallet1), Cl.uint(1), Cl.uint(10000)],
+      deployer
+    );
+  });
+
+  it("should allow transfer with allowance", () => {
+    // Set allowance
+    simnet.callPublicFn(
+      contractName,
+      "approve",
+      [Cl.principal(wallet2), Cl.uint(1), Cl.uint(3000)],
+      wallet1
+    );
+
+    // Transfer using allowance
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "transfer-from",
+      [Cl.principal(wallet1), Cl.principal(wallet3), Cl.uint(1), Cl.uint(2000)],
+      wallet2 // using allowance
+    );
+    expect(result).toBeOk(Cl.bool(true));
+
+    // Check allowance was reduced
+    const allowanceResult = simnet.callReadOnlyFn(
+      contractName,
+      "get-allowance",
+      [Cl.principal(wallet1), Cl.principal(wallet2), Cl.uint(1)],
+      deployer
+    );
+    expect(allowanceResult.result).toBeOk(Cl.uint(1000)); // 3000 - 2000
+
+    // Check balances
+    const wallet3Balance = simnet.callReadOnlyFn(
+      contractName,
+      "get-balance",
+      [Cl.principal(wallet3), Cl.uint(1)],
+      deployer
+    );
+    expect(wallet3Balance.result).toBeOk(Cl.uint(2000));
+  });
+
+  it("should reject transfer with insufficient allowance", () => {
+    // Set small allowance
+    simnet.callPublicFn(
+      contractName,
+      "approve",
+      [Cl.principal(wallet2), Cl.uint(1), Cl.uint(500)],
+      wallet1
+    );
+
+    // Try to transfer more than allowance
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "transfer-from",
+      [Cl.principal(wallet1), Cl.principal(wallet3), Cl.uint(1), Cl.uint(1000)],
+      wallet2
+    );
+    expect(result).toBeErr(Cl.uint(401)); // ERR-UNAUTHORIZED (insufficient allowance)
+  });
+
+  it("should allow transfer with operator approval", () => {
+    // Set operator approval
+    simnet.callPublicFn(
+      contractName,
+      "set-approval-for-all",
+      [Cl.principal(wallet2), Cl.bool(true), Cl.none()],
+      wallet1
+    );
+
+    // Transfer as operator
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "transfer-from",
+      [Cl.principal(wallet1), Cl.principal(wallet3), Cl.uint(1), Cl.uint(1500)],
+      wallet2 // approved operator
+    );
+    expect(result).toBeOk(Cl.bool(true));
+
+    const wallet3Balance = simnet.callReadOnlyFn(
+      contractName,
+      "get-balance",
+      [Cl.principal(wallet3), Cl.uint(1)],
+      deployer
+    );
+    expect(wallet3Balance.result).toBeOk(Cl.uint(1500));
+  });
+});
