@@ -1791,3 +1791,99 @@ describe("Bitdap Multi Token - Final Validation and Cleanup Tests", () => {
     expect(testedFeatures.length).toBeGreaterThan(10);
   });
 });
+describe("Bitdap Multi Token - Role-Based Access Control", () => {
+  it("should grant and check roles correctly", () => {
+    // Grant minter role to wallet1
+    const { result: grantResult } = simnet.callPublicFn(
+      contractName,
+      "grant-role",
+      [Cl.principal(wallet1), Cl.uint(ROLE_MINTER)],
+      deployer
+    );
+    expect(grantResult).toBeOk(Cl.bool(true));
+
+    // Check if wallet1 has minter role
+    const hasRoleResult = simnet.callReadOnlyFn(
+      contractName,
+      "has-role",
+      [Cl.principal(wallet1), Cl.uint(ROLE_MINTER)],
+      deployer
+    );
+    expect(hasRoleResult.result).toBeOk(Cl.bool(true));
+
+    // Check if wallet1 doesn't have admin role
+    const noAdminResult = simnet.callReadOnlyFn(
+      contractName,
+      "has-role",
+      [Cl.principal(wallet1), Cl.uint(ROLE_ADMIN)],
+      deployer
+    );
+    expect(noAdminResult.result).toBeOk(Cl.bool(false));
+  });
+
+  it("should allow minter role to create tokens", () => {
+    // Grant minter role to wallet2
+    simnet.callPublicFn(
+      contractName,
+      "grant-role",
+      [Cl.principal(wallet2), Cl.uint(ROLE_MINTER)],
+      deployer
+    );
+
+    // wallet2 should be able to create tokens
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "create-token",
+      [
+        Cl.stringUtf8("Minter Token"),
+        Cl.stringUtf8("MINT"),
+        Cl.uint(18),
+        Cl.bool(true),
+        Cl.none(),
+        Cl.none(),
+        Cl.none(),
+        Cl.uint(0)
+      ],
+      wallet2
+    );
+    expect(result).toBeOk(Cl.uint(1));
+  });
+
+  it("should revoke roles correctly", () => {
+    // Grant then revoke minter role
+    simnet.callPublicFn(
+      contractName,
+      "grant-role",
+      [Cl.principal(wallet3), Cl.uint(ROLE_MINTER)],
+      deployer
+    );
+
+    const { result: revokeResult } = simnet.callPublicFn(
+      contractName,
+      "revoke-role",
+      [Cl.principal(wallet3), Cl.uint(ROLE_MINTER)],
+      deployer
+    );
+    expect(revokeResult).toBeOk(Cl.bool(true));
+
+    // Check role is revoked
+    const hasRoleResult = simnet.callReadOnlyFn(
+      contractName,
+      "has-role",
+      [Cl.principal(wallet3), Cl.uint(ROLE_MINTER)],
+      deployer
+    );
+    expect(hasRoleResult.result).toBeOk(Cl.bool(false));
+  });
+
+  it("should reject role operations from unauthorized users", () => {
+    // Non-owner cannot grant roles
+    const { result: grantResult } = simnet.callPublicFn(
+      contractName,
+      "grant-role",
+      [Cl.principal(wallet2), Cl.uint(ROLE_ADMIN)],
+      wallet1
+    );
+    expect(grantResult).toBeErr(Cl.uint(401)); // ERR-UNAUTHORIZED
+  });
+});
