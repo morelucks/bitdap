@@ -2575,3 +2575,92 @@ describe("Bitdap Multi Token - Role-Based Minting and Burning", () => {
     expect(result).toBeErr(Cl.uint(401)); // ERR-UNAUTHORIZED
   });
 });
+describe("Bitdap Multi Token - Metadata Manager Role", () => {
+  beforeEach(() => {
+    // Grant metadata manager role
+    simnet.callPublicFn(
+      contractName,
+      "grant-role",
+      [Cl.principal(wallet4), Cl.uint(ROLE_METADATA_MANAGER)],
+      deployer
+    );
+
+    // Create token for metadata testing
+    simnet.callPublicFn(
+      contractName,
+      "create-token",
+      [
+        Cl.stringUtf8("Metadata Token"),
+        Cl.stringUtf8("META"),
+        Cl.uint(18),
+        Cl.bool(true),
+        Cl.some(Cl.stringUtf8("https://example.com/initial")),
+        Cl.none(),
+        Cl.none(),
+        Cl.uint(0)
+      ],
+      deployer
+    );
+  });
+
+  it("should allow metadata manager to update token URI", () => {
+    const newUri = "https://example.com/updated-by-manager";
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "set-token-uri",
+      [Cl.uint(1), Cl.some(Cl.stringUtf8(newUri))],
+      wallet4 // metadata manager
+    );
+    expect(result).toBeOk(Cl.bool(true));
+
+    const uriResult = simnet.callReadOnlyFn(
+      contractName,
+      "get-token-uri",
+      [Cl.uint(1)],
+      deployer
+    );
+    expect(uriResult.result).toBeOk(Cl.some(Cl.stringUtf8(newUri)));
+  });
+
+  it("should allow metadata manager to update token info", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "update-token-info",
+      [Cl.uint(1), Cl.stringUtf8("Updated by Manager"), Cl.stringUtf8("UBM")],
+      wallet4 // metadata manager
+    );
+    expect(result).toBeOk(Cl.bool(true));
+
+    const metadataResult = simnet.callReadOnlyFn(
+      contractName,
+      "get-token-metadata",
+      [Cl.uint(1)],
+      deployer
+    );
+    
+    // Check that name and symbol were updated
+    const metadata = metadataResult.result;
+    expect(metadata).toBeOk(
+      Cl.tuple({
+        name: Cl.stringUtf8("Updated by Manager"),
+        symbol: Cl.stringUtf8("UBM"),
+        decimals: Cl.uint(18),
+        "total-supply": Cl.uint(0),
+        "max-supply": Cl.none(),
+        "is-fungible": Cl.bool(true),
+        uri: Cl.some(Cl.stringUtf8("https://example.com/initial")),
+        creator: Cl.principal(deployer)
+      })
+    );
+  });
+
+  it("should reject metadata updates from non-manager", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "set-token-uri",
+      [Cl.uint(1), Cl.some(Cl.stringUtf8("https://unauthorized.com"))],
+      wallet1 // not metadata manager
+    );
+    expect(result).toBeErr(Cl.uint(401)); // ERR-UNAUTHORIZED
+  });
+});
