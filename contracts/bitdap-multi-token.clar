@@ -9,6 +9,11 @@
 ;; Constants
 (define-constant CONTRACT-OWNER tx-sender)
 (define-constant CONTRACT-NAME "Bitdap Multi Token")
+(define-constant MAX-ROYALTY-PERCENTAGE u1000) ;; 10% in basis points
+(define-constant ROLE-ADMIN u1)
+(define-constant ROLE-MINTER u2)
+(define-constant ROLE-BURNER u3)
+(define-constant ROLE-METADATA-MANAGER u4)
 
 ;; Error codes
 (define-constant ERR-UNAUTHORIZED (err u401))
