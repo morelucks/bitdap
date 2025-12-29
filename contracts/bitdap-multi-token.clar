@@ -527,30 +527,54 @@
 
 ;; Approval system
 
-;; Set approval for operator to manage all tokens
-(define-public (set-approval-for-all (operator principal) (approved bool))
+;; Set approval for operator to manage all tokens with optional expiration
+(define-public (set-approval-for-all (operator principal) (approved bool) (expires-at (optional uint)))
     (begin
         (asserts! (not (var-get contract-paused)) ERR-CONTRACT-PAUSED)
         (asserts! (not (is-eq tx-sender operator)) ERR-INVALID-RECIPIENT)
         
+        ;; Check expiration if provided
+        (if (is-some expires-at)
+            (asserts! (> (unwrap-panic expires-at) block-height) ERR-EXPIRED-APPROVAL)
+            true
+        )
+        
         ;; Set operator approval
-        (map-set operator-approvals { owner: tx-sender, operator: operator } { approved: approved })
+        (map-set operator-approvals { owner: tx-sender, operator: operator } { 
+            approved: approved,
+            expires-at: expires-at
+        })
         
         ;; Emit approval event
         (print {
             action: "set-approval-for-all",
             owner: tx-sender,
             operator: operator,
-            approved: approved
+            approved: approved,
+            expires-at: expires-at
         })
         
         (ok true)
     )
 )
 
-;; Check if operator is approved for all tokens
+;; Check if operator is approved for all tokens with expiration check
 (define-read-only (is-approved-for-all (owner principal) (operator principal))
-    (ok (default-to false (get approved (map-get? operator-approvals { owner: owner, operator: operator }))))
+    (match (map-get? operator-approvals { owner: owner, operator: operator })
+        approval-data (let (
+            (approved (get approved approval-data))
+            (expires-at (get expires-at approval-data))
+        )
+            (ok (and 
+                approved
+                (or 
+                    (is-none expires-at)
+                    (> (unwrap-panic expires-at) block-height)
+                )
+            ))
+        )
+        (ok false)
+    )
 )
 
 ;; Approve spender for specific token amount
