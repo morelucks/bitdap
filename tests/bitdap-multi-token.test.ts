@@ -2774,3 +2774,91 @@ describe("Bitdap Multi Token - Enhanced Transfer Authorization", () => {
     expect(wallet3Balance.result).toBeOk(Cl.uint(1500));
   });
 });
+describe("Bitdap Multi Token - Royalty Management", () => {
+  beforeEach(() => {
+    // Create token with royalty
+    simnet.callPublicFn(
+      contractName,
+      "create-token",
+      [
+        Cl.stringUtf8("Royalty Management Token"),
+        Cl.stringUtf8("RMT"),
+        Cl.uint(18),
+        Cl.bool(true),
+        Cl.none(),
+        Cl.none(),
+        Cl.some(Cl.principal(wallet1)), // initial royalty recipient
+        Cl.uint(300) // 3% royalty
+      ],
+      deployer
+    );
+  });
+
+  it("should allow token creator to update royalty info", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "set-royalty-info",
+      [Cl.uint(1), Cl.principal(wallet2), Cl.uint(500)], // 5% to wallet2
+      deployer // token creator
+    );
+    expect(result).toBeOk(Cl.bool(true));
+
+    // Check updated royalty info
+    const royaltyResult = simnet.callReadOnlyFn(
+      contractName,
+      "get-royalty-info",
+      [Cl.uint(1)],
+      deployer
+    );
+    expect(royaltyResult.result).toBeOk(
+      Cl.tuple({
+        recipient: Cl.principal(wallet2),
+        percentage: Cl.uint(500)
+      })
+    );
+  });
+
+  it("should reject royalty updates from non-creator", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "set-royalty-info",
+      [Cl.uint(1), Cl.principal(wallet3), Cl.uint(400)],
+      wallet2 // not creator
+    );
+    expect(result).toBeErr(Cl.uint(401)); // ERR-UNAUTHORIZED
+  });
+
+  it("should reject royalty percentage above maximum", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "set-royalty-info",
+      [Cl.uint(1), Cl.principal(wallet2), Cl.uint(1500)], // 15% - above max
+      deployer
+    );
+    expect(result).toBeErr(Cl.uint(412)); // ERR-INVALID-ROYALTY
+  });
+
+  it("should calculate complex royalty scenarios", () => {
+    // Test various sale prices
+    const testCases = [
+      { price: 1000, expectedFee: 30 }, // 3% of 1000
+      { price: 50000, expectedFee: 1500 }, // 3% of 50000
+      { price: 100, expectedFee: 3 } // 3% of 100
+    ];
+
+    testCases.forEach(testCase => {
+      const feeResult = simnet.callReadOnlyFn(
+        contractName,
+        "calculate-royalty-fee",
+        [Cl.uint(1), Cl.uint(testCase.price)],
+        deployer
+      );
+      expect(feeResult.result).toBeOk(
+        Cl.tuple({
+          recipient: Cl.principal(wallet1),
+          fee: Cl.uint(testCase.expectedFee)
+        })
+      );
+    });
+  });
+});
