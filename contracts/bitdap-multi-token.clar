@@ -612,16 +612,17 @@
 
 ;; Burning functionality
 
-;; Burn tokens from account (only token owner or approved operator)
+;; Burn tokens from account (only token owner, approved operator, or burner role)
 (define-public (burn (from principal) (token-id uint) (amount uint))
     (begin
         (asserts! (not (var-get contract-paused)) ERR-CONTRACT-PAUSED)
         (asserts! (> amount u0) ERR-INVALID-AMOUNT)
         
-        ;; Check authorization (owner or approved operator)
+        ;; Check authorization (owner, approved operator, or burner role)
         (asserts! (or 
             (is-eq from tx-sender)
             (unwrap-panic (is-approved-for-all from tx-sender))
+            (unwrap-panic (has-role tx-sender ROLE-BURNER))
         ) ERR-UNAUTHORIZED)
         
         ;; Check if token exists
@@ -644,7 +645,8 @@
                     token-id: token-id,
                     amount: amount,
                     new-balance: (- current-balance amount),
-                    new-supply: (- current-supply amount)
+                    new-supply: (- current-supply amount),
+                    burner: tx-sender
                 })
                 
                 (ok true)
