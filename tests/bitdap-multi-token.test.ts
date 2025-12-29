@@ -2210,3 +2210,99 @@ describe("Bitdap Multi Token - Time-Based Approvals", () => {
     expect(allowanceResult.result).toBeOk(Cl.uint(1000));
   });
 });
+describe("Bitdap Multi Token - Enhanced Batch Operations", () => {
+  beforeEach(() => {
+    // Create multiple tokens for batch testing
+    for (let i = 1; i <= 5; i++) {
+      simnet.callPublicFn(
+        contractName,
+        "create-token",
+        [
+          Cl.stringUtf8(`Batch Token ${i}`),
+          Cl.stringUtf8(`BT${i}`),
+          Cl.uint(18),
+          Cl.bool(true),
+          Cl.none(),
+          Cl.some(Cl.uint(10000)), // max supply
+          Cl.none(),
+          Cl.uint(0)
+        ],
+        deployer
+      );
+    }
+  });
+
+  it("should handle batch operations with improved error handling", () => {
+    const tokenIds = [1, 2, 3];
+    const amounts = [1000, 2000, 3000];
+
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "batch-mint",
+      [
+        Cl.principal(wallet1),
+        Cl.list(tokenIds.map(id => Cl.uint(id))),
+        Cl.list(amounts.map(amt => Cl.uint(amt)))
+      ],
+      deployer
+    );
+    expect(result).toBeOk(Cl.tuple({ to: Cl.principal(wallet1), success: Cl.bool(true) }));
+
+    // Verify all balances
+    tokenIds.forEach((tokenId, index) => {
+      const balanceResult = simnet.callReadOnlyFn(
+        contractName,
+        "get-balance",
+        [Cl.principal(wallet1), Cl.uint(tokenId)],
+        deployer
+      );
+      expect(balanceResult.result).toBeOk(Cl.uint(amounts[index]));
+    });
+  });
+
+  it("should reject batch operations with mismatched lengths", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "batch-mint",
+      [
+        Cl.principal(wallet1),
+        Cl.list([Cl.uint(1), Cl.uint(2)]),
+        Cl.list([Cl.uint(1000)]) // Mismatched length
+      ],
+      deployer
+    );
+    expect(result).toBeErr(Cl.uint(414)); // ERR-BATCH-LENGTH-MISMATCH
+  });
+
+  it("should handle batch transfers with operator tracking", () => {
+    // First mint tokens
+    simnet.callPublicFn(
+      contractName,
+      "batch-mint",
+      [
+        Cl.principal(wallet1),
+        Cl.list([Cl.uint(1), Cl.uint(2)]),
+        Cl.list([Cl.uint(2000), Cl.uint(3000)])
+      ],
+      deployer
+    );
+
+    // Then batch transfer
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "batch-transfer-from",
+      [
+        Cl.principal(wallet1),
+        Cl.principal(wallet2),
+        Cl.list([Cl.uint(1), Cl.uint(2)]),
+        Cl.list([Cl.uint(500), Cl.uint(1000)])
+      ],
+      wallet1
+    );
+    expect(result).toBeOk(Cl.tuple({ 
+      from: Cl.principal(wallet1), 
+      to: Cl.principal(wallet2),
+      operator: Cl.principal(wallet1)
+    }));
+  });
+});
