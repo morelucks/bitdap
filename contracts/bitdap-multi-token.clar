@@ -488,10 +488,10 @@
     )
 )
 
-;; Helper function for batch transfers
+;; Helper function for batch transfers with enhanced validation
 (define-private (batch-transfer-helper 
     (item { token-id: uint, amount: uint })
-    (acc (response { from: principal, to: principal } uint))
+    (acc (response { from: principal, to: principal, operator: principal } uint))
 )
     (match acc
         success-data (let (
@@ -499,6 +499,7 @@
             (amount (get amount item))
             (from (get from success-data))
             (to (get to success-data))
+            (operator (get operator success-data))
         )
             (if (> amount u0)
                 (match (map-get? token-metadata { token-id: token-id })
@@ -508,17 +509,19 @@
                     )
                         (if (>= from-balance amount)
                             (begin
-                                ;; Update balances
+                                ;; Update balances atomically
                                 (map-set balances { account: from, token-id: token-id } { balance: (- from-balance amount) })
                                 (map-set balances { account: to, token-id: token-id } { balance: (+ to-balance amount) })
                                 
-                                ;; Emit batch transfer event
+                                ;; Emit enhanced batch transfer event
                                 (print {
                                     action: "batch-transfer",
                                     from: from,
                                     to: to,
                                     token-id: token-id,
-                                    amount: amount
+                                    amount: amount,
+                                    operator: operator,
+                                    timestamp: block-height
                                 })
                                 
                                 (ok success-data)
