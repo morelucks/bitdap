@@ -321,15 +321,18 @@
     )
 )
 
-;; Batch mint multiple tokens to an account (only owner)
+;; Batch mint multiple tokens to an account (only owner or minter)
 (define-public (batch-mint (to principal) (token-ids (list 10 uint)) (amounts (list 10 uint)))
     (begin
-        (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-UNAUTHORIZED)
+        (asserts! (or 
+            (is-eq tx-sender (var-get contract-owner))
+            (unwrap-panic (has-role tx-sender ROLE-MINTER))
+        ) ERR-UNAUTHORIZED)
         (asserts! (not (var-get contract-paused)) ERR-CONTRACT-PAUSED)
-        (asserts! (is-eq (len token-ids) (len amounts)) ERR-INVALID-AMOUNT)
+        (asserts! (is-eq (len token-ids) (len amounts)) ERR-BATCH-LENGTH-MISMATCH)
         
-        ;; Process each token-amount pair
-        (fold batch-mint-helper (zip token-ids amounts) (ok true))
+        ;; Process each token-amount pair atomically
+        (fold batch-mint-helper (zip token-ids amounts) (ok { to: to, success: true }))
     )
 )
 
