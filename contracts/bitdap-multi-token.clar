@@ -209,17 +209,24 @@
     )
 )
 
-;; Create a new token type (only owner)
+;; Create a new token type (only owner or minter)
 (define-public (create-token 
     (name (string-utf8 64))
     (symbol (string-utf8 16))
     (decimals uint)
     (is-fungible bool)
     (uri (optional (string-utf8 256)))
+    (max-supply (optional uint))
+    (royalty-recipient (optional principal))
+    (royalty-percentage uint)
 )
     (begin
-        (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-UNAUTHORIZED)
+        (asserts! (or 
+            (is-eq tx-sender (var-get contract-owner))
+            (unwrap-panic (has-role tx-sender ROLE-MINTER))
+        ) ERR-UNAUTHORIZED)
         (asserts! (not (var-get contract-paused)) ERR-CONTRACT-PAUSED)
+        (asserts! (<= royalty-percentage MAX-ROYALTY-PERCENTAGE) ERR-INVALID-ROYALTY)
         
         (let ((token-id (var-get next-token-id)))
             ;; Create token metadata
@@ -228,9 +235,20 @@
                 symbol: symbol,
                 decimals: decimals,
                 total-supply: u0,
+                max-supply: max-supply,
                 is-fungible: is-fungible,
-                uri: uri
+                uri: uri,
+                creator: tx-sender
             })
+            
+            ;; Set royalty info if provided
+            (if (> royalty-percentage u0)
+                (map-set token-royalties { token-id: token-id } {
+                    recipient: (default-to tx-sender royalty-recipient),
+                    percentage: royalty-percentage
+                })
+                true
+            )
             
             ;; Increment next token ID
             (var-set next-token-id (+ token-id u1))
@@ -243,6 +261,9 @@
                 symbol: symbol,
                 decimals: decimals,
                 is-fungible: is-fungible,
+                max-supply: max-supply,
+                royalty-recipient: royalty-recipient,
+                royalty-percentage: royalty-percentage,
                 creator: tx-sender
             })
             
