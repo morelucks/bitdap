@@ -2485,3 +2485,93 @@ describe("Bitdap Multi Token - Contract Info and Version", () => {
     );
   });
 });
+describe("Bitdap Multi Token - Role-Based Minting and Burning", () => {
+  beforeEach(() => {
+    // Grant roles to different wallets
+    simnet.callPublicFn(
+      contractName,
+      "grant-role",
+      [Cl.principal(wallet2), Cl.uint(ROLE_MINTER)],
+      deployer
+    );
+    
+    simnet.callPublicFn(
+      contractName,
+      "grant-role",
+      [Cl.principal(wallet3), Cl.uint(ROLE_BURNER)],
+      deployer
+    );
+
+    // Create token for role testing
+    simnet.callPublicFn(
+      contractName,
+      "create-token",
+      [
+        Cl.stringUtf8("Role Token"),
+        Cl.stringUtf8("ROLE"),
+        Cl.uint(18),
+        Cl.bool(true),
+        Cl.none(),
+        Cl.none(),
+        Cl.none(),
+        Cl.uint(0)
+      ],
+      deployer
+    );
+  });
+
+  it("should allow minter role to mint tokens", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(wallet1), Cl.uint(1), Cl.uint(5000)],
+      wallet2 // has minter role
+    );
+    expect(result).toBeOk(Cl.bool(true));
+
+    const balanceResult = simnet.callReadOnlyFn(
+      contractName,
+      "get-balance",
+      [Cl.principal(wallet1), Cl.uint(1)],
+      deployer
+    );
+    expect(balanceResult.result).toBeOk(Cl.uint(5000));
+  });
+
+  it("should allow burner role to burn tokens", () => {
+    // First mint some tokens
+    simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(wallet1), Cl.uint(1), Cl.uint(3000)],
+      deployer
+    );
+
+    // Burner role should be able to burn
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "burn",
+      [Cl.principal(wallet1), Cl.uint(1), Cl.uint(1000)],
+      wallet3 // has burner role
+    );
+    expect(result).toBeOk(Cl.bool(true));
+
+    const balanceResult = simnet.callReadOnlyFn(
+      contractName,
+      "get-balance",
+      [Cl.principal(wallet1), Cl.uint(1)],
+      deployer
+    );
+    expect(balanceResult.result).toBeOk(Cl.uint(2000));
+  });
+
+  it("should reject minting from non-minter", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(wallet1), Cl.uint(1), Cl.uint(1000)],
+      wallet4 // no minter role
+    );
+    expect(result).toBeErr(Cl.uint(401)); // ERR-UNAUTHORIZED
+  });
+});
