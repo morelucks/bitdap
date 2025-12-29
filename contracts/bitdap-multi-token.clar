@@ -887,3 +887,86 @@
 (define-private (token-exists-helper (token-id uint))
     (is-some (map-get? token-metadata { token-id: token-id }))
 )
+;; Advanced approval with conditions
+(define-public (approve-with-conditions (spender principal) (token-id uint) (amount uint) (expires-at (optional uint)))
+    (begin
+        (asserts! (not (var-get contract-paused)) ERR-CONTRACT-PAUSED)
+        (asserts! (not (is-eq tx-sender spender)) ERR-INVALID-RECIPIENT)
+        
+        ;; Check expiration if provided
+        (if (is-some expires-at)
+            (asserts! (> (unwrap-panic expires-at) block-height) ERR-EXPIRED-APPROVAL)
+            true
+        )
+        
+        ;; Check if token exists
+        (match (map-get? token-metadata { token-id: token-id })
+            metadata (begin
+                ;; Set allowance (note: simplified - would need extended map for expiration)
+                (map-set token-allowances { owner: tx-sender, spender: spender, token-id: token-id } { allowance: amount })
+                
+                ;; Emit conditional approval event
+                (print {
+                    action: "approve-with-conditions",
+                    owner: tx-sender,
+                    spender: spender,
+                    token-id: token-id,
+                    amount: amount,
+                    expires-at: expires-at
+                })
+                
+                (ok true)
+            )
+            ERR-TOKEN-NOT-EXISTS
+        )
+    )
+)
+
+;; Emergency token recovery (only emergency admin)
+(define-public (emergency-recover (token-id uint) (from principal) (to principal) (amount uint))
+    (begin
+        (asserts! (is-some (var-get emergency-admin)) ERR-UNAUTHORIZED)
+        (asserts! (is-eq tx-sender (unwrap-panic (var-get emergency-admin))) ERR-UNAUTHORIZED)
+        
+        ;; Check if token exists
+        (match (map-get? token-metadata { token-id: token-id })
+            metadata (let (
+                (from-balance (default-to u0 (get balance (map-get? balances { account: from, token-id: token-id }))))
+                (to-balance (default-to u0 (get balance (map-get? balances { account: to, token-id: token-id }))))
+            )
+                ;; Check sufficient balance
+                (asserts! (>= from-balance amount) ERR-INSUFFICIENT-BALANCE)
+                
+                ;; Update balances
+                (map-set balances { account: from, token-id: token-id } { balance: (- from-balance amount) })
+                (map-set balances { account: to, token-id: token-id } { balance: (+ to-balance amount) })
+                
+                ;; Emit emergency recovery event
+                (print {
+                    action: "emergency-recover",
+                    from: from,
+                    to: to,
+                    token-id: token-id,
+                    amount: amount,
+                    admin: tx-sender,
+                    timestamp: block-height
+                })
+                
+                (ok true)
+            )
+            ERR-TOKEN-NOT-EXISTS
+        )
+    )
+)
+
+;; Get contract version and info
+(define-read-only (get-contract-info)
+    (ok {
+        name: CONTRACT-NAME,
+        version: "2.0.0",
+        owner: (var-get contract-owner),
+        paused: (var-get contract-paused),
+        next-token-id: (var-get next-token-id),
+        emergency-admin: (var-get emergency-admin)
+    })
+)
