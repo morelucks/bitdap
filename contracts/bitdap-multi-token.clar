@@ -20,6 +20,12 @@
 (define-constant ERR-CONTRACT-PAUSED (err u407))
 (define-constant ERR-TOKEN-NOT-EXISTS (err u408))
 (define-constant ERR-INSUFFICIENT-ALLOWANCE (err u409))
+(define-constant ERR-INVALID-ROLE (err u410))
+(define-constant ERR-ROLE-NOT-ASSIGNED (err u411))
+(define-constant ERR-INVALID-ROYALTY (err u412))
+(define-constant ERR-EXPIRED-APPROVAL (err u413))
+(define-constant ERR-BATCH-LENGTH-MISMATCH (err u414))
+(define-constant ERR-MAX-SUPPLY-EXCEEDED (err u415))
 
 ;; Data variables
 (define-data-var contract-owner principal CONTRACT-OWNER)
