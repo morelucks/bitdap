@@ -6,8 +6,16 @@ const deployer = accounts.get("deployer")!;
 const wallet1 = accounts.get("wallet_1")!;
 const wallet2 = accounts.get("wallet_2")!;
 const wallet3 = accounts.get("wallet_3")!;
+const wallet4 = accounts.get("wallet_4")!;
+const wallet5 = accounts.get("wallet_5")!;
 
 const contractName = "bitdap-multi-token";
+
+// Role constants matching the contract
+const ROLE_ADMIN = 1;
+const ROLE_MINTER = 2;
+const ROLE_BURNER = 3;
+const ROLE_METADATA_MANAGER = 4;
 
 describe("Bitdap Multi Token - Contract Initialization", () => {
   it("should initialize with correct contract metadata", () => {
