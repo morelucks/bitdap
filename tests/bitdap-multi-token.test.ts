@@ -1887,3 +1887,89 @@ describe("Bitdap Multi Token - Role-Based Access Control", () => {
     expect(grantResult).toBeErr(Cl.uint(401)); // ERR-UNAUTHORIZED
   });
 });
+describe("Bitdap Multi Token - Enhanced Token Creation with Royalties", () => {
+  it("should create tokens with royalty information", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "create-token",
+      [
+        Cl.stringUtf8("Royalty Token"),
+        Cl.stringUtf8("ROY"),
+        Cl.uint(18),
+        Cl.bool(true),
+        Cl.some(Cl.stringUtf8("https://example.com/royalty")),
+        Cl.some(Cl.uint(1000000)), // max supply
+        Cl.some(Cl.principal(wallet1)), // royalty recipient
+        Cl.uint(500) // 5% royalty
+      ],
+      deployer
+    );
+    expect(result).toBeOk(Cl.uint(1));
+
+    // Check royalty info
+    const royaltyResult = simnet.callReadOnlyFn(
+      contractName,
+      "get-royalty-info",
+      [Cl.uint(1)],
+      deployer
+    );
+    expect(royaltyResult.result).toBeOk(
+      Cl.tuple({
+        recipient: Cl.principal(wallet1),
+        percentage: Cl.uint(500)
+      })
+    );
+  });
+
+  it("should calculate royalty fees correctly", () => {
+    // Create token with 2.5% royalty
+    simnet.callPublicFn(
+      contractName,
+      "create-token",
+      [
+        Cl.stringUtf8("Fee Token"),
+        Cl.stringUtf8("FEE"),
+        Cl.uint(18),
+        Cl.bool(true),
+        Cl.none(),
+        Cl.none(),
+        Cl.some(Cl.principal(wallet2)),
+        Cl.uint(250) // 2.5%
+      ],
+      deployer
+    );
+
+    // Calculate royalty for 10000 unit sale
+    const feeResult = simnet.callReadOnlyFn(
+      contractName,
+      "calculate-royalty-fee",
+      [Cl.uint(1), Cl.uint(10000)],
+      deployer
+    );
+    expect(feeResult.result).toBeOk(
+      Cl.tuple({
+        recipient: Cl.principal(wallet2),
+        fee: Cl.uint(250) // 2.5% of 10000
+      })
+    );
+  });
+
+  it("should reject royalty percentage above maximum", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "create-token",
+      [
+        Cl.stringUtf8("Invalid Royalty"),
+        Cl.stringUtf8("INVALID"),
+        Cl.uint(18),
+        Cl.bool(true),
+        Cl.none(),
+        Cl.none(),
+        Cl.some(Cl.principal(wallet1)),
+        Cl.uint(1500) // 15% - above 10% max
+      ],
+      deployer
+    );
+    expect(result).toBeErr(Cl.uint(412)); // ERR-INVALID-ROYALTY
+  });
+});
