@@ -149,6 +149,66 @@
 
 ;; Public functions
 
+;; Grant role to user (only admin)
+(define-public (grant-role (user principal) (role uint))
+    (begin
+        (asserts! (or 
+            (is-eq tx-sender (var-get contract-owner))
+            (unwrap-panic (has-role tx-sender ROLE-ADMIN))
+        ) ERR-UNAUTHORIZED)
+        (asserts! (not (var-get contract-paused)) ERR-CONTRACT-PAUSED)
+        
+        (map-set user-roles { user: user, role: role } { assigned: true })
+        
+        (print {
+            action: "grant-role",
+            user: user,
+            role: role,
+            granter: tx-sender
+        })
+        
+        (ok true)
+    )
+)
+
+;; Revoke role from user (only admin)
+(define-public (revoke-role (user principal) (role uint))
+    (begin
+        (asserts! (or 
+            (is-eq tx-sender (var-get contract-owner))
+            (unwrap-panic (has-role tx-sender ROLE-ADMIN))
+        ) ERR-UNAUTHORIZED)
+        (asserts! (not (var-get contract-paused)) ERR-CONTRACT-PAUSED)
+        
+        (map-delete user-roles { user: user, role: role })
+        
+        (print {
+            action: "revoke-role",
+            user: user,
+            role: role,
+            revoker: tx-sender
+        })
+        
+        (ok true)
+    )
+)
+
+;; Set emergency admin
+(define-public (set-emergency-admin (admin principal))
+    (begin
+        (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-UNAUTHORIZED)
+        (var-set emergency-admin (some admin))
+        
+        (print {
+            action: "set-emergency-admin",
+            admin: admin,
+            setter: tx-sender
+        })
+        
+        (ok true)
+    )
+)
+
 ;; Create a new token type (only owner)
 (define-public (create-token 
     (name (string-utf8 64))
