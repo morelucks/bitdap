@@ -2364,3 +2364,74 @@ describe("Bitdap Multi Token - Batch Balance Queries", () => {
     );
   });
 });
+describe("Bitdap Multi Token - Emergency Recovery", () => {
+  beforeEach(() => {
+    // Set up emergency admin and tokens
+    simnet.callPublicFn(
+      contractName,
+      "set-emergency-admin",
+      [Cl.principal(wallet5)],
+      deployer
+    );
+    
+    simnet.callPublicFn(
+      contractName,
+      "create-token",
+      [
+        Cl.stringUtf8("Recovery Token"),
+        Cl.stringUtf8("REC"),
+        Cl.uint(18),
+        Cl.bool(true),
+        Cl.none(),
+        Cl.none(),
+        Cl.none(),
+        Cl.uint(0)
+      ],
+      deployer
+    );
+    
+    simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(wallet1), Cl.uint(1), Cl.uint(10000)],
+      deployer
+    );
+  });
+
+  it("should allow emergency admin to recover tokens", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "emergency-recover",
+      [Cl.uint(1), Cl.principal(wallet1), Cl.principal(wallet2), Cl.uint(5000)],
+      wallet5 // emergency admin
+    );
+    expect(result).toBeOk(Cl.bool(true));
+
+    // Check balances after recovery
+    const wallet1Balance = simnet.callReadOnlyFn(
+      contractName,
+      "get-balance",
+      [Cl.principal(wallet1), Cl.uint(1)],
+      deployer
+    );
+    expect(wallet1Balance.result).toBeOk(Cl.uint(5000));
+
+    const wallet2Balance = simnet.callReadOnlyFn(
+      contractName,
+      "get-balance",
+      [Cl.principal(wallet2), Cl.uint(1)],
+      deployer
+    );
+    expect(wallet2Balance.result).toBeOk(Cl.uint(5000));
+  });
+
+  it("should reject emergency recovery from non-admin", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "emergency-recover",
+      [Cl.uint(1), Cl.principal(wallet1), Cl.principal(wallet2), Cl.uint(1000)],
+      wallet3 // not emergency admin
+    );
+    expect(result).toBeErr(Cl.uint(401)); // ERR-UNAUTHORIZED
+  });
+});
