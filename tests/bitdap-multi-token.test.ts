@@ -2945,3 +2945,139 @@ describe("Bitdap Multi Token - Advanced Error Handling", () => {
     expect(batchMintResult).toBeErr(Cl.uint(415)); // ERR-MAX-SUPPLY-EXCEEDED
   });
 });
+describe("Bitdap Multi Token - Integration with All New Features", () => {
+  it("should handle complete workflow with all new features", () => {
+    // 1. Set up roles
+    simnet.callPublicFn(
+      contractName,
+      "grant-role",
+      [Cl.principal(wallet1), Cl.uint(ROLE_MINTER)],
+      deployer
+    );
+    simnet.callPublicFn(
+      contractName,
+      "grant-role",
+      [Cl.principal(wallet2), Cl.uint(ROLE_BURNER)],
+      deployer
+    );
+    simnet.callPublicFn(
+      contractName,
+      "grant-role",
+      [Cl.principal(wallet3), Cl.uint(ROLE_METADATA_MANAGER)],
+      deployer
+    );
+
+    // 2. Create token with all features
+    const { result: createResult } = simnet.callPublicFn(
+      contractName,
+      "create-token",
+      [
+        Cl.stringUtf8("Complete Feature Token"),
+        Cl.stringUtf8("CFT"),
+        Cl.uint(18),
+        Cl.bool(true),
+        Cl.some(Cl.stringUtf8("https://example.com/cft")),
+        Cl.some(Cl.uint(100000)), // max supply
+        Cl.some(Cl.principal(wallet4)), // royalty recipient
+        Cl.uint(750) // 7.5% royalty
+      ],
+      deployer
+    );
+    expect(createResult).toBeOk(Cl.uint(1));
+
+    // 3. Mint using minter role
+    const { result: mintResult } = simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(wallet5), Cl.uint(1), Cl.uint(50000)],
+      wallet1 // minter role
+    );
+    expect(mintResult).toBeOk(Cl.bool(true));
+
+    // 4. Set time-based approval
+    const { result: approvalResult } = simnet.callPublicFn(
+      contractName,
+      "set-approval-for-all",
+      [Cl.principal(wallet2), Cl.bool(true), Cl.some(Cl.uint(5000))],
+      wallet5
+    );
+    expect(approvalResult).toBeOk(Cl.bool(true));
+
+    // 5. Transfer with operator
+    const { result: transferResult } = simnet.callPublicFn(
+      contractName,
+      "transfer-from",
+      [Cl.principal(wallet5), Cl.principal(wallet1), Cl.uint(1), Cl.uint(10000)],
+      wallet2 // approved operator
+    );
+    expect(transferResult).toBeOk(Cl.bool(true));
+
+    // 6. Update metadata using metadata manager
+    const { result: metadataResult } = simnet.callPublicFn(
+      contractName,
+      "update-token-info",
+      [Cl.uint(1), Cl.stringUtf8("Updated Complete Token"), Cl.stringUtf8("UCT")],
+      wallet3 // metadata manager
+    );
+    expect(metadataResult).toBeOk(Cl.bool(true));
+
+    // 7. Burn using burner role
+    const { result: burnResult } = simnet.callPublicFn(
+      contractName,
+      "burn",
+      [Cl.principal(wallet1), Cl.uint(1), Cl.uint(5000)],
+      wallet2 // burner role
+    );
+    expect(burnResult).toBeOk(Cl.bool(true));
+
+    // 8. Calculate royalty
+    const { result: royaltyResult } = simnet.callReadOnlyFn(
+      contractName,
+      "calculate-royalty-fee",
+      [Cl.uint(1), Cl.uint(20000)],
+      deployer
+    );
+    expect(royaltyResult.result).toBeOk(
+      Cl.tuple({
+        recipient: Cl.principal(wallet4),
+        fee: Cl.uint(1500) // 7.5% of 20000
+      })
+    );
+
+    // 9. Verify final state
+    const finalBalance = simnet.callReadOnlyFn(
+      contractName,
+      "get-balance",
+      [Cl.principal(wallet1), Cl.uint(1)],
+      deployer
+    );
+    expect(finalBalance.result).toBeOk(Cl.uint(5000)); // 10000 - 5000 burned
+
+    const finalSupply = simnet.callReadOnlyFn(
+      contractName,
+      "get-total-supply",
+      [Cl.uint(1)],
+      deployer
+    );
+    expect(finalSupply.result).toBeOk(Cl.uint(45000)); // 50000 - 5000 burned
+
+    const updatedMetadata = simnet.callReadOnlyFn(
+      contractName,
+      "get-token-metadata",
+      [Cl.uint(1)],
+      deployer
+    );
+    expect(updatedMetadata.result).toBeOk(
+      Cl.tuple({
+        name: Cl.stringUtf8("Updated Complete Token"),
+        symbol: Cl.stringUtf8("UCT"),
+        decimals: Cl.uint(18),
+        "total-supply": Cl.uint(45000),
+        "max-supply": Cl.some(Cl.uint(100000)),
+        "is-fungible": Cl.bool(true),
+        uri: Cl.some(Cl.stringUtf8("https://example.com/cft")),
+        creator: Cl.principal(deployer)
+      })
+    );
+  });
+});
