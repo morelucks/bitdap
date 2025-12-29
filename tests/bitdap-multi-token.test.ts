@@ -2133,3 +2133,80 @@ describe("Bitdap Multi Token - Emergency Controls", () => {
     expect(result).toBeErr(Cl.uint(407)); // ERR-CONTRACT-PAUSED
   });
 });
+describe("Bitdap Multi Token - Time-Based Approvals", () => {
+  beforeEach(() => {
+    // Create token for approval tests
+    simnet.callPublicFn(
+      contractName,
+      "create-token",
+      [
+        Cl.stringUtf8("Approval Token"),
+        Cl.stringUtf8("APPR"),
+        Cl.uint(18),
+        Cl.bool(true),
+        Cl.none(),
+        Cl.none(),
+        Cl.none(),
+        Cl.uint(0)
+      ],
+      deployer
+    );
+    simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(wallet1), Cl.uint(1), Cl.uint(5000)],
+      deployer
+    );
+  });
+
+  it("should set approval with expiration", () => {
+    const futureBlock = 1000;
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "set-approval-for-all",
+      [Cl.principal(wallet2), Cl.bool(true), Cl.some(Cl.uint(futureBlock))],
+      wallet1
+    );
+    expect(result).toBeOk(Cl.bool(true));
+
+    // Check approval is active
+    const approvalResult = simnet.callReadOnlyFn(
+      contractName,
+      "is-approved-for-all",
+      [Cl.principal(wallet1), Cl.principal(wallet2)],
+      deployer
+    );
+    expect(approvalResult.result).toBeOk(Cl.bool(true));
+  });
+
+  it("should reject expired approvals", () => {
+    const pastBlock = 1; // Block in the past
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "set-approval-for-all",
+      [Cl.principal(wallet2), Cl.bool(true), Cl.some(Cl.uint(pastBlock))],
+      wallet1
+    );
+    expect(result).toBeErr(Cl.uint(413)); // ERR-EXPIRED-APPROVAL
+  });
+
+  it("should handle conditional approvals", () => {
+    const futureBlock = 2000;
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "approve-with-conditions",
+      [Cl.principal(wallet3), Cl.uint(1), Cl.uint(1000), Cl.some(Cl.uint(futureBlock))],
+      wallet1
+    );
+    expect(result).toBeOk(Cl.bool(true));
+
+    // Check allowance was set
+    const allowanceResult = simnet.callReadOnlyFn(
+      contractName,
+      "get-allowance",
+      [Cl.principal(wallet1), Cl.principal(wallet3), Cl.uint(1)],
+      deployer
+    );
+    expect(allowanceResult.result).toBeOk(Cl.uint(1000));
+  });
+});
