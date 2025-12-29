@@ -272,10 +272,13 @@
     )
 )
 
-;; Mint tokens to an account (only owner)
+;; Mint tokens to an account (only owner or minter)
 (define-public (mint (to principal) (token-id uint) (amount uint))
     (begin
-        (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-UNAUTHORIZED)
+        (asserts! (or 
+            (is-eq tx-sender (var-get contract-owner))
+            (unwrap-panic (has-role tx-sender ROLE-MINTER))
+        ) ERR-UNAUTHORIZED)
         (asserts! (not (var-get contract-paused)) ERR-CONTRACT-PAUSED)
         (asserts! (> amount u0) ERR-INVALID-AMOUNT)
         
@@ -286,7 +289,14 @@
                 (new-balance (+ current-balance amount))
                 (current-supply (get total-supply metadata))
                 (new-supply (+ current-supply amount))
+                (max-supply (get max-supply metadata))
             )
+                ;; Check max supply if set
+                (asserts! (or 
+                    (is-none max-supply)
+                    (<= new-supply (unwrap-panic max-supply))
+                ) ERR-MAX-SUPPLY-EXCEEDED)
+                
                 ;; Update balance
                 (map-set balances { account: to, token-id: token-id } { balance: new-balance })
                 
@@ -300,7 +310,8 @@
                     token-id: token-id,
                     amount: amount,
                     new-balance: new-balance,
-                    new-supply: new-supply
+                    new-supply: new-supply,
+                    minter: tx-sender
                 })
                 
                 (ok true)
