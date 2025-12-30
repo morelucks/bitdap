@@ -1534,3 +1534,88 @@
         error error
     )
 )
+;; Integration utilities and helper functions
+(define-read-only (get-contract-stats)
+    (ok {
+        total-tokens: (var-get next-token-id),
+        contract-paused: (var-get contract-paused),
+        pause-level: (var-get pause-level),
+        emergency-admin: (var-get emergency-admin),
+        next-operation-id: (var-get next-operation-id),
+        reentrancy-guard: (var-get reentrancy-guard)
+    })
+)
+
+;; Batch token information query
+(define-read-only (get-tokens-info-batch (token-ids (list 10 uint)))
+    (ok (map get-token-info-helper token-ids))
+)
+
+;; Helper for token info queries
+(define-private (get-token-info-helper (token-id uint))
+    (match (map-get? token-metadata { token-id: token-id })
+        metadata (some {
+            metadata: metadata,
+            royalty: (map-get? token-royalties { token-id: token-id }),
+            frozen: (default-to false (get frozen (map-get? frozen-tokens { token-id: token-id })))
+        })
+        none
+    )
+)
+
+;; Migration utilities for contract upgrades
+(define-public (migrate-token-data (old-token-id uint) (new-token-id uint))
+    (begin
+        (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-UNAUTHORIZED)
+        (asserts! (not (var-get contract-paused)) ERR-CONTRACT-PAUSED)
+        
+        ;; Copy metadata if source exists and target doesn't
+        (match (map-get? token-metadata { token-id: old-token-id })
+            old-metadata (begin
+                (asserts! (is-none (map-get? token-metadata { token-id: new-token-id })) ERR-INVALID-TOKEN-ID)
+                (map-set token-metadata { token-id: new-token-id } old-metadata)
+                
+                ;; Copy royalty info if exists
+                (match (map-get? token-royalties { token-id: old-token-id })
+                    royalty-info (map-set token-royalties { token-id: new-token-id } royalty-info)
+                    true
+                )
+                
+                (log-audit-event "migrate-token" none (some new-token-id) none)
+                (ok true)
+            )
+            ERR-TOKEN-NOT-EXISTS
+        )
+    )
+)
+
+;; Compatibility layer for older contract versions
+(define-read-only (legacy-get-balance (account principal) (token-id uint))
+    (get-balance account token-id)
+)
+
+(define-read-only (legacy-get-total-supply (token-id uint))
+    (get-total-supply token-id)
+)
+
+;; Performance optimization helpers
+(define-private (optimize-storage-access (token-id uint))
+    ;; Placeholder for storage optimization logic
+    true
+)
+
+;; Final contract information and version
+(define-read-only (get-enhanced-contract-info)
+    (ok {
+        name: CONTRACT-NAME,
+        version: "3.0.0-enhanced",
+        owner: (var-get contract-owner),
+        paused: (var-get contract-paused),
+        pause-level: (var-get pause-level),
+        pause-reason: (var-get pause-reason),
+        next-token-id: (var-get next-token-id),
+        emergency-admin: (var-get emergency-admin),
+        features: (list "role-based-access" "royalties" "batch-operations" "emergency-controls" "audit-trail" "marketplace-integration" "token-freezing"),
+        total-operations: (var-get next-operation-id)
+    })
+)
