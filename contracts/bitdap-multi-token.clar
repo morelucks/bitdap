@@ -72,10 +72,26 @@
     { allowance: uint }
 )
 
-;; Role-based access control
+;; Enhanced role-based access control with metadata
 (define-map user-roles
     { user: principal, role: uint }
-    { assigned: bool }
+    { 
+        assigned: bool,
+        assigned-by: principal,
+        assigned-at: uint
+    }
+)
+
+;; Role hierarchy mapping
+(define-map role-hierarchy
+    { parent-role: uint, child-role: uint }
+    { inherited: bool }
+)
+
+;; Role permissions mapping
+(define-map role-permissions
+    { role: uint, permission: (string-ascii 32) }
+    { granted: bool }
 )
 
 ;; Royalty information
@@ -124,9 +140,31 @@
     (ok (is-some (map-get? token-metadata { token-id: token-id })))
 )
 
-;; Check if user has role
+;; Check if user has role (including inherited roles)
 (define-read-only (has-role (user principal) (role uint))
-    (ok (default-to false (get assigned (map-get? user-roles { user: user, role: role }))))
+    (ok (or 
+        (default-to false (get assigned (map-get? user-roles { user: user, role: role })))
+        (has-inherited-role user role)
+    ))
+)
+
+;; Check if user has inherited role
+(define-private (has-inherited-role (user principal) (role uint))
+    (or 
+        (and (default-to false (get assigned (map-get? user-roles { user: user, role: ROLE-ADMIN })))
+             (not (is-eq role ROLE-ADMIN)))
+        false ;; Add more inheritance logic as needed
+    )
+)
+
+;; Get all roles for a user
+(define-read-only (get-user-roles (user principal))
+    (ok (list 
+        { role: ROLE-ADMIN, assigned: (default-to false (get assigned (map-get? user-roles { user: user, role: ROLE-ADMIN }))) }
+        { role: ROLE-MINTER, assigned: (default-to false (get assigned (map-get? user-roles { user: user, role: ROLE-MINTER }))) }
+        { role: ROLE-BURNER, assigned: (default-to false (get assigned (map-get? user-roles { user: user, role: ROLE-BURNER }))) }
+        { role: ROLE-METADATA-MANAGER, assigned: (default-to false (get assigned (map-get? user-roles { user: user, role: ROLE-METADATA-MANAGER }))) }
+    ))
 )
 
 ;; Get royalty info for token
