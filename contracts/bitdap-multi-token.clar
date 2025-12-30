@@ -1425,3 +1425,112 @@
         })
     )
 )
+;; Security enhancements
+(define-data-var reentrancy-guard bool false)
+
+;; Reentrancy protection modifier
+(define-private (with-reentrancy-guard (func (response bool uint)))
+    (begin
+        (asserts! (not (var-get reentrancy-guard)) ERR-UNAUTHORIZED)
+        (var-set reentrancy-guard true)
+        (let ((result func))
+            (var-set reentrancy-guard false)
+            result
+        )
+    )
+)
+
+;; Audit trail for sensitive operations
+(define-map audit-trail
+    { operation-id: uint }
+    {
+        action: (string-ascii 32),
+        actor: principal,
+        target: (optional principal),
+        token-id: (optional uint),
+        amount: (optional uint),
+        timestamp: uint,
+        block-height: uint
+    }
+)
+
+(define-data-var next-operation-id uint u1)
+
+;; Log audit event
+(define-private (log-audit-event (action (string-ascii 32)) (target (optional principal)) (token-id (optional uint)) (amount (optional uint)))
+    (let ((operation-id (var-get next-operation-id)))
+        (map-set audit-trail { operation-id: operation-id } {
+            action: action,
+            actor: tx-sender,
+            target: target,
+            token-id: token-id,
+            amount: amount,
+            timestamp: block-height,
+            block-height: block-height
+        })
+        (var-set next-operation-id (+ operation-id u1))
+        operation-id
+    )
+)
+
+;; Get audit trail entry
+(define-read-only (get-audit-entry (operation-id uint))
+    (ok (map-get? audit-trail { operation-id: operation-id }))
+)
+
+;; Advanced batch operations with conditions
+(define-public (conditional-batch-transfer (conditions (list 5 { from: principal, to: principal, token-id: uint, amount: uint, condition: (string-ascii 32) })))
+    (begin
+        (asserts! (not (var-get contract-paused)) ERR-CONTRACT-PAUSED)
+        
+        ;; Validate all conditions first
+        (try! (fold validate-condition-helper conditions (ok true)))
+        
+        ;; Execute all transfers
+        (fold execute-conditional-transfer-helper conditions (ok true))
+    )
+)
+
+;; Validate condition helper
+(define-private (validate-condition-helper (item { from: principal, to: principal, token-id: uint, amount: uint, condition: (string-ascii 32) }) (acc (response bool uint)))
+    (match acc
+        success (let (
+            (from (get from item))
+            (to (get to item))
+            (token-id (get token-id item))
+            (amount (get amount item))
+            (condition (get condition item))
+        )
+            ;; Add condition validation logic here
+            (if (and 
+                (> amount u0)
+                (not (is-eq from to))
+                (or 
+                    (is-eq from tx-sender)
+                    (unwrap-panic (is-approved-for-all from tx-sender))
+                )
+            )
+                (ok true)
+                ERR-UNAUTHORIZED
+            )
+        )
+        error error
+    )
+)
+
+;; Execute conditional transfer helper
+(define-private (execute-conditional-transfer-helper (item { from: principal, to: principal, token-id: uint, amount: uint, condition: (string-ascii 32) }) (acc (response bool uint)))
+    (match acc
+        success (let (
+            (from (get from item))
+            (to (get to item))
+            (token-id (get token-id item))
+            (amount (get amount item))
+        )
+            (try! (transfer-from from to token-id amount))
+            (log-audit-event "conditional-transfer" (some to) (some token-id) (some amount))
+            (ok true)
+        )
+        error error
+    )
+)
