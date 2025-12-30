@@ -34,7 +34,12 @@
 
 ;; Data variables
 (define-data-var contract-owner principal CONTRACT-OWNER)
+;; Enhanced contract pause with selective restrictions
 (define-data-var contract-paused bool false)
+(define-data-var pause-level uint u0) ;; 0: normal, 1: transfers only, 2: full pause
+(define-data-var pause-reason (optional (string-ascii 128)) none)
+(define-data-var paused-at (optional uint) none)
+(define-data-var paused-by (optional principal) none)
 (define-data-var next-token-id uint u1)
 (define-data-var emergency-admin (optional principal) none)
 
@@ -1011,18 +1016,25 @@
     )
 )
 
-;; Emergency pause/unpause functions
-(define-public (pause-contract)
+;; Enhanced pause contract with levels and reasons
+(define-public (pause-contract (level uint) (reason (optional (string-ascii 128))))
     (begin
         (asserts! (or 
             (is-eq tx-sender (var-get contract-owner))
             (is-some (var-get emergency-admin))
         ) ERR-UNAUTHORIZED)
+        (asserts! (<= level u2) ERR-INVALID-AMOUNT) ;; Valid pause levels: 0, 1, 2
         
         (var-set contract-paused true)
+        (var-set pause-level level)
+        (var-set pause-reason reason)
+        (var-set paused-at (some block-height))
+        (var-set paused-by (some tx-sender))
         
         (print {
             action: "pause-contract",
+            level: level,
+            reason: reason,
             pauser: tx-sender,
             timestamp: block-height
         })
@@ -1031,14 +1043,19 @@
     )
 )
 
+;; Enhanced unpause with validation
 (define-public (unpause-contract)
     (begin
         (asserts! (or 
             (is-eq tx-sender (var-get contract-owner))
             (is-some (var-get emergency-admin))
         ) ERR-UNAUTHORIZED)
-        
+
         (var-set contract-paused false)
+        (var-set pause-level u0)
+        (var-set pause-reason none)
+        (var-set paused-at none)
+        (var-set paused-by none)
         
         (print {
             action: "unpause-contract",
