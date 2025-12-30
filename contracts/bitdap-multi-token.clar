@@ -818,31 +818,56 @@
     )
 )
 
-;; Approve spender for specific token amount
-(define-public (approve (spender principal) (token-id uint) (amount uint))
+;; Enhanced approve with conditions and expiration
+(define-public (approve (spender principal) (token-id uint) (amount uint) (expires-at (optional uint)) (conditions (optional (string-ascii 64))))
     (begin
         (asserts! (not (var-get contract-paused)) ERR-CONTRACT-PAUSED)
         (asserts! (not (is-eq tx-sender spender)) ERR-INVALID-RECIPIENT)
         
+        ;; Check expiration if provided
+        (if (is-some expires-at)
+            (asserts! (> (unwrap-panic expires-at) block-height) ERR-EXPIRED-APPROVAL)
+            true
+        )
+        
         ;; Check if token exists
         (match (map-get? token-metadata { token-id: token-id })
             metadata (begin
-                ;; Set allowance
-                (map-set token-allowances { owner: tx-sender, spender: spender, token-id: token-id } { allowance: amount })
+                ;; Set allowance with enhanced metadata
+                (map-set token-allowances { owner: tx-sender, spender: spender, token-id: token-id } { 
+                    allowance: amount,
+                    expires-at: expires-at,
+                    conditions: conditions
+                })
                 
-                ;; Emit approval event
+                ;; Emit enhanced approval event
                 (print {
                     action: "approve",
                     owner: tx-sender,
                     spender: spender,
                     token-id: token-id,
-                    amount: amount
+                    amount: amount,
+                    expires-at: expires-at,
+                    conditions: conditions,
+                    timestamp: block-height
                 })
                 
                 (ok true)
             )
             ERR-TOKEN-NOT-EXISTS
         )
+    )
+)
+
+;; Get enhanced allowance information
+(define-read-only (get-allowance-details (owner principal) (spender principal) (token-id uint))
+    (match (map-get? token-allowances { owner: owner, spender: spender, token-id: token-id })
+        allowance-data (ok allowance-data)
+        (ok { 
+            allowance: u0,
+            expires-at: none,
+            conditions: none
+        })
     )
 )
 
