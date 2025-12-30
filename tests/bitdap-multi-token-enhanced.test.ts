@@ -365,3 +365,319 @@ describe("Bitdap Multi Token - Enhanced Batch Querying", () => {
     );
   });
 });
+describe("Bitdap Multi Token - Enhanced Emergency Controls", () => {
+  it("should support enhanced pause with levels and reasons", () => {
+    const pauseLevel = 2; // Full pause
+    const pauseReason = "Security maintenance";
+
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "pause-contract",
+      [Cl.uint(pauseLevel), Cl.some(Cl.stringAscii(pauseReason))],
+      deployer
+    );
+    expect(result).toBeOk(Cl.bool(true));
+
+    // Check enhanced pause status
+    const pauseStatusResult = simnet.callReadOnlyFn(
+      contractName,
+      "get-pause-status",
+      [],
+      deployer
+    );
+    expect(pauseStatusResult.result).toBeOk(
+      Cl.tuple({
+        paused: Cl.bool(true),
+        level: Cl.uint(pauseLevel),
+        reason: Cl.some(Cl.stringAscii(pauseReason)),
+        "paused-at": Cl.some(Cl.uint(1)),
+        "paused-by": Cl.some(Cl.principal(deployer))
+      })
+    );
+  });
+
+  it("should reject invalid pause levels", () => {
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "pause-contract",
+      [Cl.uint(5), Cl.none()], // Invalid level > 2
+      deployer
+    );
+    expect(result).toBeErr(Cl.uint(404)); // ERR-INVALID-AMOUNT
+  });
+
+  it("should clear pause metadata on unpause", () => {
+    // Pause first
+    simnet.callPublicFn(
+      contractName,
+      "pause-contract",
+      [Cl.uint(1), Cl.some(Cl.stringAscii("Test pause"))],
+      deployer
+    );
+
+    // Unpause
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "unpause-contract",
+      [],
+      deployer
+    );
+    expect(result).toBeOk(Cl.bool(true));
+
+    // Check pause status is cleared
+    const pauseStatusResult = simnet.callReadOnlyFn(
+      contractName,
+      "get-pause-status",
+      [],
+      deployer
+    );
+    expect(pauseStatusResult.result).toBeOk(
+      Cl.tuple({
+        paused: Cl.bool(false),
+        level: Cl.uint(0),
+        reason: Cl.none(),
+        "paused-at": Cl.none(),
+        "paused-by": Cl.none()
+      })
+    );
+  });
+});
+
+describe("Bitdap Multi Token - Enhanced Approval System", () => {
+  beforeEach(() => {
+    // Create token for approval tests
+    simnet.callPublicFn(
+      contractName,
+      "create-token",
+      [
+        Cl.stringUtf8("Approval Token"),
+        Cl.stringUtf8("APPR"),
+        Cl.uint(18),
+        Cl.bool(true),
+        Cl.none(),
+        Cl.none(),
+        Cl.none(),
+        Cl.uint(0)
+      ],
+      deployer
+    );
+    simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(wallet1), Cl.uint(1), Cl.uint(5000)],
+      deployer
+    );
+  });
+
+  it("should set approval for all with conditions and expiration", () => {
+    const futureBlock = 1000;
+    const conditions = "marketplace-only";
+
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "set-approval-for-all",
+      [
+        Cl.principal(wallet2),
+        Cl.bool(true),
+        Cl.some(Cl.uint(futureBlock)),
+        Cl.some(Cl.stringAscii(conditions))
+      ],
+      wallet1
+    );
+    expect(result).toBeOk(Cl.bool(true));
+
+    // Check approval is active
+    const approvalResult = simnet.callReadOnlyFn(
+      contractName,
+      "is-approved-for-all",
+      [Cl.principal(wallet1), Cl.principal(wallet2)],
+      deployer
+    );
+    expect(approvalResult.result).toBeOk(Cl.bool(true));
+  });
+
+  it("should support enhanced approve with conditions", () => {
+    const futureBlock = 2000;
+    const conditions = "limit-per-day";
+
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "approve",
+      [
+        Cl.principal(wallet3),
+        Cl.uint(1),
+        Cl.uint(1000),
+        Cl.some(Cl.uint(futureBlock)),
+        Cl.some(Cl.stringAscii(conditions))
+      ],
+      wallet1
+    );
+    expect(result).toBeOk(Cl.bool(true));
+
+    // Check enhanced allowance details
+    const allowanceResult = simnet.callReadOnlyFn(
+      contractName,
+      "get-allowance-details",
+      [Cl.principal(wallet1), Cl.principal(wallet3), Cl.uint(1)],
+      deployer
+    );
+    expect(allowanceResult.result).toBeOk(
+      Cl.tuple({
+        allowance: Cl.uint(1000),
+        "expires-at": Cl.some(Cl.uint(futureBlock)),
+        conditions: Cl.some(Cl.stringAscii(conditions))
+      })
+    );
+  });
+
+  it("should validate expiration in transfers", () => {
+    // Set approval with past expiration
+    const pastBlock = 1;
+    const { result: approveResult } = simnet.callPublicFn(
+      contractName,
+      "approve",
+      [
+        Cl.principal(wallet2),
+        Cl.uint(1),
+        Cl.uint(500),
+        Cl.some(Cl.uint(pastBlock)),
+        Cl.none()
+      ],
+      wallet1
+    );
+    expect(approveResult).toBeErr(Cl.uint(413)); // ERR-EXPIRED-APPROVAL
+  });
+});
+
+describe("Bitdap Multi Token - Atomic Batch Operations", () => {
+  beforeEach(() => {
+    // Create tokens for atomic batch testing
+    for (let i = 1; i <= 3; i++) {
+      simnet.callPublicFn(
+        contractName,
+        "create-token",
+        [
+          Cl.stringUtf8(`Atomic Token ${i}`),
+          Cl.stringUtf8(`AT${i}`),
+          Cl.uint(18),
+          Cl.bool(true),
+          Cl.none(),
+          Cl.some(Cl.uint(10000)), // max supply
+          Cl.none(),
+          Cl.uint(0)
+        ],
+        deployer
+      );
+    }
+  });
+
+  it("should execute atomic batch mint with pre-validation", () => {
+    const tokenIds = [1, 2, 3];
+    const amounts = [1000, 2000, 3000];
+
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "batch-mint-atomic",
+      [
+        Cl.principal(wallet1),
+        Cl.list(tokenIds.map(id => Cl.uint(id))),
+        Cl.list(amounts.map(amt => Cl.uint(amt)))
+      ],
+      deployer
+    );
+    expect(result).toBeOk(Cl.tuple({ to: Cl.principal(wallet1), success: Cl.bool(true) }));
+
+    // Verify all tokens were minted
+    tokenIds.forEach((tokenId, index) => {
+      const balanceResult = simnet.callReadOnlyFn(
+        contractName,
+        "get-balance",
+        [Cl.principal(wallet1), Cl.uint(tokenId)],
+        deployer
+      );
+      expect(balanceResult.result).toBeOk(Cl.uint(amounts[index]));
+    });
+  });
+
+  it("should fail atomic batch mint if any token exceeds max supply", () => {
+    // First mint near max supply for token 1
+    simnet.callPublicFn(
+      contractName,
+      "mint",
+      [Cl.principal(wallet1), Cl.uint(1), Cl.uint(9500)],
+      deployer
+    );
+
+    // Try atomic batch mint that would exceed max supply
+    const tokenIds = [1, 2, 3];
+    const amounts = [1000, 2000, 3000]; // Token 1 would exceed 10000
+
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "batch-mint-atomic",
+      [
+        Cl.principal(wallet2),
+        Cl.list(tokenIds.map(id => Cl.uint(id))),
+        Cl.list(amounts.map(amt => Cl.uint(amt)))
+      ],
+      deployer
+    );
+    expect(result).toBeErr(Cl.uint(415)); // ERR-MAX-SUPPLY-EXCEEDED
+
+    // Verify no tokens were minted (atomic failure)
+    const balance2Result = simnet.callReadOnlyFn(
+      contractName,
+      "get-balance",
+      [Cl.principal(wallet2), Cl.uint(2)],
+      deployer
+    );
+    expect(balance2Result.result).toBeOk(Cl.uint(0));
+  });
+
+  it("should handle enhanced batch transfers with detailed events", () => {
+    // First mint tokens
+    const tokenIds = [1, 2];
+    const amounts = [2000, 3000];
+    
+    simnet.callPublicFn(
+      contractName,
+      "batch-mint-atomic",
+      [
+        Cl.principal(wallet1),
+        Cl.list(tokenIds.map(id => Cl.uint(id))),
+        Cl.list(amounts.map(amt => Cl.uint(amt)))
+      ],
+      deployer
+    );
+
+    // Transfer tokens
+    const transferAmounts = [500, 1000];
+    const { result } = simnet.callPublicFn(
+      contractName,
+      "batch-transfer-from",
+      [
+        Cl.principal(wallet1),
+        Cl.principal(wallet2),
+        Cl.list(tokenIds.map(id => Cl.uint(id))),
+        Cl.list(transferAmounts.map(amt => Cl.uint(amt)))
+      ],
+      wallet1
+    );
+    expect(result).toBeOk(
+      Cl.tuple({
+        from: Cl.principal(wallet1),
+        to: Cl.principal(wallet2),
+        operator: Cl.principal(wallet1)
+      })
+    );
+
+    // Verify transfers
+    const wallet2Balance1 = simnet.callReadOnlyFn(
+      contractName,
+      "get-balance",
+      [Cl.principal(wallet2), Cl.uint(1)],
+      deployer
+    );
+    expect(wallet2Balance1.result).toBeOk(Cl.uint(500));
+  });
+});
