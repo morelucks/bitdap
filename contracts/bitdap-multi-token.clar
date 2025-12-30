@@ -515,8 +515,8 @@
     )
 )
 
-;; Batch mint multiple tokens to an account (only owner or minter)
-(define-public (batch-mint (to principal) (token-ids (list 10 uint)) (amounts (list 10 uint)))
+;; Enhanced batch operations with pre-validation and atomic execution
+(define-public (batch-mint-atomic (to principal) (token-ids (list 10 uint)) (amounts (list 10 uint)))
     (begin
         (asserts! (or 
             (is-eq tx-sender (var-get contract-owner))
@@ -525,8 +525,91 @@
         (asserts! (not (var-get contract-paused)) ERR-CONTRACT-PAUSED)
         (asserts! (is-eq (len token-ids) (len amounts)) ERR-BATCH-LENGTH-MISMATCH)
         
-        ;; Process each token-amount pair atomically
-        (fold batch-mint-helper (zip token-ids amounts) (ok { to: to, success: true }))
+        ;; Pre-validate all operations before executing any
+        (try! (fold batch-mint-validate-helper (zip token-ids amounts) (ok { to: to, valid: true })))
+        
+        ;; Execute all operations atomically
+        (fold batch-mint-execute-helper (zip token-ids amounts) (ok { to: to, success: true }))
+    )
+)
+
+;; Validation helper for batch minting
+(define-private (batch-mint-validate-helper 
+    (item { token-id: uint, amount: uint })
+    (acc (response { to: principal, valid: bool } uint))
+)
+    (match acc
+        success-data (let (
+            (token-id (get token-id item))
+            (amount (get amount item))
+        )
+            (if (> amount u0)
+                (match (map-get? token-metadata { token-id: token-id })
+                    metadata (let (
+                        (current-supply (get total-supply metadata))
+                        (new-supply (+ current-supply amount))
+                        (max-supply (get max-supply metadata))
+                    )
+                        (if (or 
+                            (is-none max-supply)
+                            (<= new-supply (unwrap-panic max-supply))
+                        )
+                            (ok success-data)
+                            ERR-MAX-SUPPLY-EXCEEDED
+                        )
+                    )
+                    ERR-TOKEN-NOT-EXISTS
+                )
+                (ok success-data)
+            )
+        )
+        error error
+    )
+)
+
+;; Execution helper for batch minting
+(define-private (batch-mint-execute-helper 
+    (item { token-id: uint, amount: uint })
+    (acc (response { to: principal, success: bool } uint))
+)
+    (match acc
+        success-data (let (
+            (token-id (get token-id item))
+            (amount (get amount item))
+            (to (get to success-data))
+        )
+            (if (> amount u0)
+                (match (map-get? token-metadata { token-id: token-id })
+                    metadata (let (
+                        (current-balance (default-to u0 (get balance (map-get? balances { account: to, token-id: token-id }))))
+                        (new-balance (+ current-balance amount))
+                        (current-supply (get total-supply metadata))
+                        (new-supply (+ current-supply amount))
+                    )
+                        ;; Update balance and supply
+                        (map-set balances { account: to, token-id: token-id } { balance: new-balance })
+                        (map-set token-metadata { token-id: token-id } (merge metadata { total-supply: new-supply }))
+                        
+                        ;; Emit atomic batch mint event
+                        (print {
+                            action: "atomic-batch-mint",
+                            to: to,
+                            token-id: token-id,
+                            amount: amount,
+                            new-balance: new-balance,
+                            new-supply: new-supply,
+                            minter: tx-sender,
+                            timestamp: block-height
+                        })
+                        
+                        (ok success-data)
+                    )
+                    ERR-TOKEN-NOT-EXISTS
+                )
+                (ok success-data)
+            )
+        )
+        error error
     )
 )
 
