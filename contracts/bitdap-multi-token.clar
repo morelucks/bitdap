@@ -94,10 +94,25 @@
     { granted: bool }
 )
 
-;; Royalty information
+;; Enhanced royalty information with detailed metadata
 (define-map token-royalties
     { token-id: uint }
-    { recipient: principal, percentage: uint }
+    { 
+        recipient: principal, 
+        percentage: uint,
+        created-by: principal,
+        created-at: uint,
+        last-updated: uint
+    }
+)
+
+;; Secondary royalty recipients for complex royalty splits
+(define-map secondary-royalties
+    { token-id: uint, recipient-index: uint }
+    {
+        recipient: principal,
+        percentage: uint
+    }
 )
 
 ;; Read-only functions
@@ -167,11 +182,55 @@
     ))
 )
 
-;; Get royalty info for token
+;; Get enhanced royalty info for token
 (define-read-only (get-royalty-info (token-id uint))
     (match (map-get? token-royalties { token-id: token-id })
         royalty-info (ok royalty-info)
-        (ok { recipient: (var-get contract-owner), percentage: u0 })
+        (ok { 
+            recipient: (var-get contract-owner), 
+            percentage: u0,
+            created-by: (var-get contract-owner),
+            created-at: u0,
+            last-updated: u0
+        })
+    )
+)
+
+;; Update royalty information (only owner or metadata manager)
+(define-public (update-royalty-info (token-id uint) (recipient principal) (percentage uint))
+    (begin
+        (asserts! (or 
+            (is-eq tx-sender (var-get contract-owner))
+            (unwrap-panic (has-role tx-sender ROLE-METADATA-MANAGER))
+        ) ERR-UNAUTHORIZED)
+        (asserts! (not (var-get contract-paused)) ERR-CONTRACT-PAUSED)
+        (asserts! (<= percentage MAX-ROYALTY-PERCENTAGE) ERR-INVALID-ROYALTY)
+        
+        ;; Check if token exists
+        (match (map-get? token-metadata { token-id: token-id })
+            metadata (begin
+                ;; Update royalty info
+                (map-set token-royalties { token-id: token-id } {
+                    recipient: recipient,
+                    percentage: percentage,
+                    created-by: (default-to tx-sender (get created-by (map-get? token-royalties { token-id: token-id }))),
+                    created-at: (default-to block-height (get created-at (map-get? token-royalties { token-id: token-id }))),
+                    last-updated: block-height
+                })
+                
+                (print {
+                    action: "update-royalty-info",
+                    token-id: token-id,
+                    recipient: recipient,
+                    percentage: percentage,
+                    updater: tx-sender,
+                    timestamp: block-height
+                })
+                
+                (ok true)
+            )
+            ERR-TOKEN-NOT-EXISTS
+        )
     )
 )
 
