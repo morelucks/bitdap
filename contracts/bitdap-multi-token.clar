@@ -187,7 +187,7 @@
 
 ;; Public functions
 
-;; Grant role to user (only admin)
+;; Grant role to user with enhanced metadata (only admin)
 (define-public (grant-role (user principal) (role uint))
     (begin
         (asserts! (or 
@@ -196,16 +196,55 @@
         ) ERR-UNAUTHORIZED)
         (asserts! (not (var-get contract-paused)) ERR-CONTRACT-PAUSED)
         
-        (map-set user-roles { user: user, role: role } { assigned: true })
+        (map-set user-roles { user: user, role: role } { 
+            assigned: true,
+            assigned-by: tx-sender,
+            assigned-at: block-height
+        })
         
         (print {
             action: "grant-role",
             user: user,
             role: role,
-            granter: tx-sender
+            granter: tx-sender,
+            timestamp: block-height
         })
         
         (ok true)
+    )
+)
+
+;; Bulk grant roles to multiple users
+(define-public (bulk-grant-roles (users (list 10 principal)) (role uint))
+    (begin
+        (asserts! (or 
+            (is-eq tx-sender (var-get contract-owner))
+            (unwrap-panic (has-role tx-sender ROLE-ADMIN))
+        ) ERR-UNAUTHORIZED)
+        (asserts! (not (var-get contract-paused)) ERR-CONTRACT-PAUSED)
+        
+        (fold bulk-grant-helper users (ok role))
+    )
+)
+
+;; Helper for bulk role granting
+(define-private (bulk-grant-helper (user principal) (acc (response uint uint)))
+    (match acc
+        role-id (begin
+            (map-set user-roles { user: user, role: role-id } { 
+                assigned: true,
+                assigned-by: tx-sender,
+                assigned-at: block-height
+            })
+            (print {
+                action: "bulk-grant-role",
+                user: user,
+                role: role-id,
+                granter: tx-sender
+            })
+            (ok role-id)
+        )
+        error error
     )
 )
 
