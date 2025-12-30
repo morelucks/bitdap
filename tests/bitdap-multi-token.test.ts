@@ -655,11 +655,11 @@ describe("Bitdap Multi Token - Approval System", () => {
     );
   });
 
-  it("should set approval for all tokens", () => {
+  it("should set approval for all tokens with enhanced parameters", () => {
     const { result } = simnet.callPublicFn(
       contractName,
       "set-approval-for-all",
-      [Cl.principal(wallet2), Cl.bool(true)],
+      [Cl.principal(wallet2), Cl.bool(true), Cl.none(), Cl.none()],
       wallet1
     );
     expect(result).toBeOk(Cl.bool(true));
@@ -679,7 +679,7 @@ describe("Bitdap Multi Token - Approval System", () => {
     simnet.callPublicFn(
       contractName,
       "set-approval-for-all",
-      [Cl.principal(wallet2), Cl.bool(true)],
+      [Cl.principal(wallet2), Cl.bool(true), Cl.none(), Cl.none()],
       wallet1
     );
 
@@ -687,7 +687,7 @@ describe("Bitdap Multi Token - Approval System", () => {
     const { result } = simnet.callPublicFn(
       contractName,
       "set-approval-for-all",
-      [Cl.principal(wallet2), Cl.bool(false)],
+      [Cl.principal(wallet2), Cl.bool(false), Cl.none(), Cl.none()],
       wallet1
     );
     expect(result).toBeOk(Cl.bool(true));
@@ -702,12 +702,12 @@ describe("Bitdap Multi Token - Approval System", () => {
     expect(approvalResult.result).toBeOk(Cl.bool(false));
   });
 
-  it("should set token-specific approval", () => {
+  it("should set token-specific approval with enhanced parameters", () => {
     const approvalAmount = 1000;
     const { result } = simnet.callPublicFn(
       contractName,
       "approve",
-      [Cl.principal(wallet2), Cl.uint(1), Cl.uint(approvalAmount)],
+      [Cl.principal(wallet2), Cl.uint(1), Cl.uint(approvalAmount), Cl.none(), Cl.none()],
       wallet1
     );
     expect(result).toBeOk(Cl.bool(true));
@@ -726,7 +726,7 @@ describe("Bitdap Multi Token - Approval System", () => {
     const { result } = simnet.callPublicFn(
       contractName,
       "set-approval-for-all",
-      [Cl.principal(wallet1), Cl.bool(true)],
+      [Cl.principal(wallet1), Cl.bool(true), Cl.none(), Cl.none()],
       wallet1
     );
     expect(result).toBeErr(Cl.uint(406)); // ERR-INVALID-RECIPIENT
