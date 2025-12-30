@@ -617,10 +617,21 @@
                 ;; Check sufficient balance
                 (asserts! (>= from-balance amount) ERR-INSUFFICIENT-BALANCE)
                 
-                ;; Update allowance if using allowance-based transfer
+                ;; Update allowance if using allowance-based transfer with expiration check
                 (if (and (not (is-eq from tx-sender)) (not (unwrap-panic (is-approved-for-all from tx-sender))))
-                    (map-set token-allowances { owner: from, spender: tx-sender, token-id: token-id } 
-                        { allowance: (- current-allowance amount) })
+                    (let ((allowance-data (map-get? token-allowances { owner: from, spender: tx-sender, token-id: token-id })))
+                        (match allowance-data
+                            data (let ((expires-at (get expires-at data)))
+                                (asserts! (or 
+                                    (is-none expires-at)
+                                    (> (unwrap-panic expires-at) block-height)
+                                ) ERR-EXPIRED-APPROVAL)
+                                (map-set token-allowances { owner: from, spender: tx-sender, token-id: token-id } 
+                                    (merge data { allowance: (- current-allowance amount) }))
+                            )
+                            (asserts! false ERR-INSUFFICIENT-ALLOWANCE)
+                        )
+                    )
                     true
                 )
                 
@@ -753,8 +764,8 @@
 
 ;; Approval system
 
-;; Set approval for operator to manage all tokens with optional expiration
-(define-public (set-approval-for-all (operator principal) (approved bool) (expires-at (optional uint)))
+;; Enhanced set approval for operator with conditions
+(define-public (set-approval-for-all (operator principal) (approved bool) (expires-at (optional uint)) (conditions (optional (string-ascii 64))))
     (begin
         (asserts! (not (var-get contract-paused)) ERR-CONTRACT-PAUSED)
         (asserts! (not (is-eq tx-sender operator)) ERR-INVALID-RECIPIENT)
@@ -765,19 +776,23 @@
             true
         )
         
-        ;; Set operator approval
+        ;; Set operator approval with enhanced metadata
         (map-set operator-approvals { owner: tx-sender, operator: operator } { 
             approved: approved,
-            expires-at: expires-at
+            expires-at: expires-at,
+            approved-at: block-height,
+            conditions: conditions
         })
         
-        ;; Emit approval event
+        ;; Emit enhanced approval event
         (print {
             action: "set-approval-for-all",
             owner: tx-sender,
             operator: operator,
             approved: approved,
-            expires-at: expires-at
+            expires-at: expires-at,
+            conditions: conditions,
+            timestamp: block-height
         })
         
         (ok true)
