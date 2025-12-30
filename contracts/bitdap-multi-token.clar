@@ -60,16 +60,25 @@
     { balance: uint }
 )
 
-;; owner -> operator -> approved (for all tokens)
+;; Enhanced operator approvals with metadata
 (define-map operator-approvals
     { owner: principal, operator: principal }
-    { approved: bool, expires-at: (optional uint) }
+    { 
+        approved: bool, 
+        expires-at: (optional uint),
+        approved-at: uint,
+        conditions: (optional (string-ascii 64))
+    }
 )
 
-;; owner -> spender -> token-id -> allowance
+;; Enhanced allowance system with expiration and conditions
 (define-map token-allowances
     { owner: principal, spender: principal, token-id: uint }
-    { allowance: uint }
+    { 
+        allowance: uint,
+        expires-at: (optional uint),
+        conditions: (optional (string-ascii 64))
+    }
 )
 
 ;; Enhanced role-based access control with metadata
@@ -377,11 +386,14 @@
                 creator: tx-sender
             })
             
-            ;; Set royalty info if provided
+            ;; Set royalty info if provided with enhanced metadata
             (if (> royalty-percentage u0)
                 (map-set token-royalties { token-id: token-id } {
                     recipient: (default-to tx-sender royalty-recipient),
-                    percentage: royalty-percentage
+                    percentage: royalty-percentage,
+                    created-by: tx-sender,
+                    created-at: block-height,
+                    last-updated: block-height
                 })
                 true
             )
