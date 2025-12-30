@@ -11,7 +11,7 @@ const wallet5 = accounts.get("wallet_5")!;
 
 const contractName = "bitdap-multi-token";
 
-// Role constants matching the contract
+// Enhanced role constants
 const ROLE_ADMIN = 1;
 const ROLE_MINTER = 2;
 const ROLE_BURNER = 3;
@@ -54,7 +54,7 @@ describe("Bitdap Multi Token - Contract Initialization", () => {
 });
 
 describe("Bitdap Multi Token - Token Creation", () => {
-  it("should create a fungible token successfully", () => {
+  it("should create a fungible token successfully with enhanced parameters", () => {
     const { result } = simnet.callPublicFn(
       contractName,
       "create-token",
@@ -63,13 +63,16 @@ describe("Bitdap Multi Token - Token Creation", () => {
         Cl.stringUtf8("TFT"),
         Cl.uint(18),
         Cl.bool(true),
-        Cl.some(Cl.stringUtf8("https://example.com/token/1"))
+        Cl.some(Cl.stringUtf8("https://example.com/token/1")),
+        Cl.some(Cl.uint(1000000)), // max supply
+        Cl.some(Cl.principal(wallet1)), // royalty recipient
+        Cl.uint(250) // 2.5% royalty
       ],
       deployer
     );
     expect(result).toBeOk(Cl.uint(1));
 
-    // Verify token metadata
+    // Verify enhanced token metadata
     const metadataResult = simnet.callReadOnlyFn(
       contractName,
       "get-token-metadata",
@@ -82,8 +85,27 @@ describe("Bitdap Multi Token - Token Creation", () => {
         symbol: Cl.stringUtf8("TFT"),
         decimals: Cl.uint(18),
         "total-supply": Cl.uint(0),
+        "max-supply": Cl.some(Cl.uint(1000000)),
         "is-fungible": Cl.bool(true),
-        uri: Cl.some(Cl.stringUtf8("https://example.com/token/1"))
+        uri: Cl.some(Cl.stringUtf8("https://example.com/token/1")),
+        creator: Cl.principal(deployer)
+      })
+    );
+
+    // Verify royalty information
+    const royaltyResult = simnet.callReadOnlyFn(
+      contractName,
+      "get-royalty-info",
+      [Cl.uint(1)],
+      deployer
+    );
+    expect(royaltyResult.result).toBeOk(
+      Cl.tuple({
+        recipient: Cl.principal(wallet1),
+        percentage: Cl.uint(250),
+        "created-by": Cl.principal(deployer),
+        "created-at": Cl.uint(1),
+        "last-updated": Cl.uint(1)
       })
     );
 
@@ -97,7 +119,7 @@ describe("Bitdap Multi Token - Token Creation", () => {
     expect(nextTokenIdResult.result).toBeOk(Cl.uint(2));
   });
 
-  it("should create a non-fungible token successfully", () => {
+  it("should create a non-fungible token successfully with enhanced parameters", () => {
     const { result } = simnet.callPublicFn(
       contractName,
       "create-token",
@@ -106,13 +128,16 @@ describe("Bitdap Multi Token - Token Creation", () => {
         Cl.stringUtf8("TNFT"),
         Cl.uint(0),
         Cl.bool(false),
-        Cl.none()
+        Cl.none(),
+        Cl.some(Cl.uint(1)), // max supply of 1 for NFT
+        Cl.none(), // no royalty recipient
+        Cl.uint(0) // no royalty
       ],
       deployer
     );
     expect(result).toBeOk(Cl.uint(1));
 
-    // Verify token metadata
+    // Verify enhanced token metadata
     const metadataResult = simnet.callReadOnlyFn(
       contractName,
       "get-token-metadata",
@@ -125,13 +150,15 @@ describe("Bitdap Multi Token - Token Creation", () => {
         symbol: Cl.stringUtf8("TNFT"),
         decimals: Cl.uint(0),
         "total-supply": Cl.uint(0),
+        "max-supply": Cl.some(Cl.uint(1)),
         "is-fungible": Cl.bool(false),
-        uri: Cl.none()
+        uri: Cl.none(),
+        creator: Cl.principal(deployer)
       })
     );
   });
 
-  it("should reject token creation from non-owner", () => {
+  it("should reject token creation from non-owner without proper role", () => {
     const { result } = simnet.callPublicFn(
       contractName,
       "create-token",
@@ -140,7 +167,10 @@ describe("Bitdap Multi Token - Token Creation", () => {
         Cl.stringUtf8("UNAUTH"),
         Cl.uint(18),
         Cl.bool(true),
-        Cl.none()
+        Cl.none(),
+        Cl.none(),
+        Cl.none(),
+        Cl.uint(0)
       ],
       wallet1
     );
