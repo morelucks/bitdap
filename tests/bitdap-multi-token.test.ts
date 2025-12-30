@@ -180,7 +180,7 @@ describe("Bitdap Multi Token - Token Creation", () => {
 
 describe("Bitdap Multi Token - Minting", () => {
   beforeEach(() => {
-    // Create a test token for minting tests
+    // Create a test token for minting tests with enhanced parameters
     simnet.callPublicFn(
       contractName,
       "create-token",
@@ -189,7 +189,10 @@ describe("Bitdap Multi Token - Minting", () => {
         Cl.stringUtf8("TEST"),
         Cl.uint(18),
         Cl.bool(true),
-        Cl.none()
+        Cl.none(),
+        Cl.some(Cl.uint(100000)), // max supply
+        Cl.none(),
+        Cl.uint(0)
       ],
       deployer
     );
@@ -257,7 +260,7 @@ describe("Bitdap Multi Token - Minting", () => {
 
 describe("Bitdap Multi Token - Batch Minting", () => {
   beforeEach(() => {
-    // Create multiple test tokens
+    // Create multiple test tokens with enhanced parameters
     simnet.callPublicFn(
       contractName,
       "create-token",
@@ -266,7 +269,10 @@ describe("Bitdap Multi Token - Batch Minting", () => {
         Cl.stringUtf8("TKNA"),
         Cl.uint(18),
         Cl.bool(true),
-        Cl.none()
+        Cl.none(),
+        Cl.none(),
+        Cl.none(),
+        Cl.uint(0)
       ],
       deployer
     );
@@ -278,19 +284,22 @@ describe("Bitdap Multi Token - Batch Minting", () => {
         Cl.stringUtf8("TKNB"),
         Cl.uint(6),
         Cl.bool(true),
-        Cl.none()
+        Cl.none(),
+        Cl.none(),
+        Cl.none(),
+        Cl.uint(0)
       ],
       deployer
     );
   });
 
-  it("should batch mint multiple tokens successfully", () => {
+  it("should batch mint multiple tokens successfully with enhanced validation", () => {
     const tokenIds = [1, 2];
     const amounts = [1000, 2000];
 
     const { result } = simnet.callPublicFn(
       contractName,
-      "batch-mint",
+      "batch-mint-atomic",
       [
         Cl.principal(wallet1),
         Cl.list(tokenIds.map(id => Cl.uint(id))),
@@ -298,7 +307,7 @@ describe("Bitdap Multi Token - Batch Minting", () => {
       ],
       deployer
     );
-    expect(result).toBeOk(Cl.bool(true));
+    expect(result).toBeOk(Cl.tuple({ to: Cl.principal(wallet1), success: Cl.bool(true) }));
 
     // Check balances for both tokens
     const balance1 = simnet.callReadOnlyFn(
@@ -321,7 +330,7 @@ describe("Bitdap Multi Token - Batch Minting", () => {
   it("should reject batch mint with mismatched array lengths", () => {
     const { result } = simnet.callPublicFn(
       contractName,
-      "batch-mint",
+      "batch-mint-atomic",
       [
         Cl.principal(wallet1),
         Cl.list([Cl.uint(1), Cl.uint(2)]),
@@ -329,7 +338,7 @@ describe("Bitdap Multi Token - Batch Minting", () => {
       ],
       deployer
     );
-    expect(result).toBeErr(Cl.uint(404)); // ERR-INVALID-AMOUNT
+    expect(result).toBeErr(Cl.uint(414)); // ERR-BATCH-LENGTH-MISMATCH
   });
 });
 
