@@ -1299,3 +1299,129 @@
         emergency-admin: (var-get emergency-admin)
     })
 )
+
+;; Token freezing functionality
+(define-map frozen-tokens
+    { token-id: uint }
+    { 
+        frozen: bool,
+        frozen-by: principal,
+        frozen-at: uint,
+        reason: (optional (string-ascii 128))
+    }
+)
+
+;; Freeze/unfreeze token transfers
+(define-public (freeze-token (token-id uint) (reason (optional (string-ascii 128))))
+    (begin
+        (asserts! (or 
+            (is-eq tx-sender (var-get contract-owner))
+            (unwrap-panic (has-role tx-sender ROLE-ADMIN))
+        ) ERR-UNAUTHORIZED)
+        (asserts! (not (var-get contract-paused)) ERR-CONTRACT-PAUSED)
+        
+        ;; Check if token exists
+        (match (map-get? token-metadata { token-id: token-id })
+            metadata (begin
+                (map-set frozen-tokens { token-id: token-id } {
+                    frozen: true,
+                    frozen-by: tx-sender,
+                    frozen-at: block-height,
+                    reason: reason
+                })
+                
+                (print {
+                    action: "freeze-token",
+                    token-id: token-id,
+                    reason: reason,
+                    frozen-by: tx-sender,
+                    timestamp: block-height
+                })
+                
+                (ok true)
+            )
+            ERR-TOKEN-NOT-EXISTS
+        )
+    )
+)
+
+;; Unfreeze token
+(define-public (unfreeze-token (token-id uint))
+    (begin
+        (asserts! (or 
+            (is-eq tx-sender (var-get contract-owner))
+            (unwrap-panic (has-role tx-sender ROLE-ADMIN))
+        ) ERR-UNAUTHORIZED)
+        (asserts! (not (var-get contract-paused)) ERR-CONTRACT-PAUSED)
+        
+        (map-delete frozen-tokens { token-id: token-id })
+        
+        (print {
+            action: "unfreeze-token",
+            token-id: token-id,
+            unfrozen-by: tx-sender,
+            timestamp: block-height
+        })
+        
+        (ok true)
+    )
+)
+
+;; Check if token is frozen
+(define-read-only (is-token-frozen (token-id uint))
+    (ok (default-to false (get frozen (map-get? frozen-tokens { token-id: token-id }))))
+)
+
+;; Marketplace integration features
+(define-map marketplace-approvals
+    { marketplace: principal, token-owner: principal }
+    {
+        approved: bool,
+        fee-percentage: uint,
+        approved-at: uint
+    }
+)
+
+;; Approve marketplace for trading
+(define-public (approve-marketplace (marketplace principal) (fee-percentage uint))
+    (begin
+        (asserts! (not (var-get contract-paused)) ERR-CONTRACT-PAUSED)
+        (asserts! (<= fee-percentage u1000) ERR-INVALID-ROYALTY) ;; Max 10% marketplace fee
+        
+        (map-set marketplace-approvals { marketplace: marketplace, token-owner: tx-sender } {
+            approved: true,
+            fee-percentage: fee-percentage,
+            approved-at: block-height
+        })
+        
+        (print {
+            action: "approve-marketplace",
+            marketplace: marketplace,
+            token-owner: tx-sender,
+            fee-percentage: fee-percentage,
+            timestamp: block-height
+        })
+        
+        (ok true)
+    )
+)
+
+;; Calculate total fees for marketplace transaction
+(define-read-only (calculate-total-fees (token-id uint) (marketplace principal) (sale-price uint))
+    (let (
+        (royalty-info (unwrap-panic (get-royalty-info token-id)))
+        (marketplace-info (map-get? marketplace-approvals { marketplace: marketplace, token-owner: tx-sender }))
+        (royalty-fee (/ (* sale-price (get percentage royalty-info)) u10000))
+        (marketplace-fee (match marketplace-info
+            info (/ (* sale-price (get fee-percentage info)) u10000)
+            u0
+        ))
+    )
+        (ok {
+            royalty-fee: royalty-fee,
+            marketplace-fee: marketplace-fee,
+            total-fees: (+ royalty-fee marketplace-fee),
+            net-amount: (- sale-price (+ royalty-fee marketplace-fee))
+        })
+    )
+)
