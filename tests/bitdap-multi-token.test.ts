@@ -11,7 +11,7 @@ const wallet5 = accounts.get("wallet_5")!;
 
 const contractName = "bitdap-multi-token";
 
-// Role constants matching the contract
+// Enhanced role constants
 const ROLE_ADMIN = 1;
 const ROLE_MINTER = 2;
 const ROLE_BURNER = 3;
@@ -54,7 +54,7 @@ describe("Bitdap Multi Token - Contract Initialization", () => {
 });
 
 describe("Bitdap Multi Token - Token Creation", () => {
-  it("should create a fungible token successfully", () => {
+  it("should create a fungible token successfully with enhanced parameters", () => {
     const { result } = simnet.callPublicFn(
       contractName,
       "create-token",
@@ -63,13 +63,16 @@ describe("Bitdap Multi Token - Token Creation", () => {
         Cl.stringUtf8("TFT"),
         Cl.uint(18),
         Cl.bool(true),
-        Cl.some(Cl.stringUtf8("https://example.com/token/1"))
+        Cl.some(Cl.stringUtf8("https://example.com/token/1")),
+        Cl.some(Cl.uint(1000000)), // max supply
+        Cl.some(Cl.principal(wallet1)), // royalty recipient
+        Cl.uint(250) // 2.5% royalty
       ],
       deployer
     );
     expect(result).toBeOk(Cl.uint(1));
 
-    // Verify token metadata
+    // Verify enhanced token metadata
     const metadataResult = simnet.callReadOnlyFn(
       contractName,
       "get-token-metadata",
@@ -82,8 +85,27 @@ describe("Bitdap Multi Token - Token Creation", () => {
         symbol: Cl.stringUtf8("TFT"),
         decimals: Cl.uint(18),
         "total-supply": Cl.uint(0),
+        "max-supply": Cl.some(Cl.uint(1000000)),
         "is-fungible": Cl.bool(true),
-        uri: Cl.some(Cl.stringUtf8("https://example.com/token/1"))
+        uri: Cl.some(Cl.stringUtf8("https://example.com/token/1")),
+        creator: Cl.principal(deployer)
+      })
+    );
+
+    // Verify royalty information
+    const royaltyResult = simnet.callReadOnlyFn(
+      contractName,
+      "get-royalty-info",
+      [Cl.uint(1)],
+      deployer
+    );
+    expect(royaltyResult.result).toBeOk(
+      Cl.tuple({
+        recipient: Cl.principal(wallet1),
+        percentage: Cl.uint(250),
+        "created-by": Cl.principal(deployer),
+        "created-at": Cl.uint(1),
+        "last-updated": Cl.uint(1)
       })
     );
 
@@ -97,7 +119,7 @@ describe("Bitdap Multi Token - Token Creation", () => {
     expect(nextTokenIdResult.result).toBeOk(Cl.uint(2));
   });
 
-  it("should create a non-fungible token successfully", () => {
+  it("should create a non-fungible token successfully with enhanced parameters", () => {
     const { result } = simnet.callPublicFn(
       contractName,
       "create-token",
@@ -106,13 +128,16 @@ describe("Bitdap Multi Token - Token Creation", () => {
         Cl.stringUtf8("TNFT"),
         Cl.uint(0),
         Cl.bool(false),
-        Cl.none()
+        Cl.none(),
+        Cl.some(Cl.uint(1)), // max supply of 1 for NFT
+        Cl.none(), // no royalty recipient
+        Cl.uint(0) // no royalty
       ],
       deployer
     );
     expect(result).toBeOk(Cl.uint(1));
 
-    // Verify token metadata
+    // Verify enhanced token metadata
     const metadataResult = simnet.callReadOnlyFn(
       contractName,
       "get-token-metadata",
@@ -125,13 +150,15 @@ describe("Bitdap Multi Token - Token Creation", () => {
         symbol: Cl.stringUtf8("TNFT"),
         decimals: Cl.uint(0),
         "total-supply": Cl.uint(0),
+        "max-supply": Cl.some(Cl.uint(1)),
         "is-fungible": Cl.bool(false),
-        uri: Cl.none()
+        uri: Cl.none(),
+        creator: Cl.principal(deployer)
       })
     );
   });
 
-  it("should reject token creation from non-owner", () => {
+  it("should reject token creation from non-owner without proper role", () => {
     const { result } = simnet.callPublicFn(
       contractName,
       "create-token",
@@ -140,7 +167,10 @@ describe("Bitdap Multi Token - Token Creation", () => {
         Cl.stringUtf8("UNAUTH"),
         Cl.uint(18),
         Cl.bool(true),
-        Cl.none()
+        Cl.none(),
+        Cl.none(),
+        Cl.none(),
+        Cl.uint(0)
       ],
       wallet1
     );
@@ -150,7 +180,7 @@ describe("Bitdap Multi Token - Token Creation", () => {
 
 describe("Bitdap Multi Token - Minting", () => {
   beforeEach(() => {
-    // Create a test token for minting tests
+    // Create a test token for minting tests with enhanced parameters
     simnet.callPublicFn(
       contractName,
       "create-token",
@@ -159,7 +189,10 @@ describe("Bitdap Multi Token - Minting", () => {
         Cl.stringUtf8("TEST"),
         Cl.uint(18),
         Cl.bool(true),
-        Cl.none()
+        Cl.none(),
+        Cl.some(Cl.uint(100000)), // max supply
+        Cl.none(),
+        Cl.uint(0)
       ],
       deployer
     );
@@ -227,7 +260,7 @@ describe("Bitdap Multi Token - Minting", () => {
 
 describe("Bitdap Multi Token - Batch Minting", () => {
   beforeEach(() => {
-    // Create multiple test tokens
+    // Create multiple test tokens with enhanced parameters
     simnet.callPublicFn(
       contractName,
       "create-token",
@@ -236,7 +269,10 @@ describe("Bitdap Multi Token - Batch Minting", () => {
         Cl.stringUtf8("TKNA"),
         Cl.uint(18),
         Cl.bool(true),
-        Cl.none()
+        Cl.none(),
+        Cl.none(),
+        Cl.none(),
+        Cl.uint(0)
       ],
       deployer
     );
@@ -248,19 +284,22 @@ describe("Bitdap Multi Token - Batch Minting", () => {
         Cl.stringUtf8("TKNB"),
         Cl.uint(6),
         Cl.bool(true),
-        Cl.none()
+        Cl.none(),
+        Cl.none(),
+        Cl.none(),
+        Cl.uint(0)
       ],
       deployer
     );
   });
 
-  it("should batch mint multiple tokens successfully", () => {
+  it("should batch mint multiple tokens successfully with enhanced validation", () => {
     const tokenIds = [1, 2];
     const amounts = [1000, 2000];
 
     const { result } = simnet.callPublicFn(
       contractName,
-      "batch-mint",
+      "batch-mint-atomic",
       [
         Cl.principal(wallet1),
         Cl.list(tokenIds.map(id => Cl.uint(id))),
@@ -268,7 +307,7 @@ describe("Bitdap Multi Token - Batch Minting", () => {
       ],
       deployer
     );
-    expect(result).toBeOk(Cl.bool(true));
+    expect(result).toBeOk(Cl.tuple({ to: Cl.principal(wallet1), success: Cl.bool(true) }));
 
     // Check balances for both tokens
     const balance1 = simnet.callReadOnlyFn(
@@ -291,7 +330,7 @@ describe("Bitdap Multi Token - Batch Minting", () => {
   it("should reject batch mint with mismatched array lengths", () => {
     const { result } = simnet.callPublicFn(
       contractName,
-      "batch-mint",
+      "batch-mint-atomic",
       [
         Cl.principal(wallet1),
         Cl.list([Cl.uint(1), Cl.uint(2)]),
@@ -299,7 +338,7 @@ describe("Bitdap Multi Token - Batch Minting", () => {
       ],
       deployer
     );
-    expect(result).toBeErr(Cl.uint(404)); // ERR-INVALID-AMOUNT
+    expect(result).toBeErr(Cl.uint(414)); // ERR-BATCH-LENGTH-MISMATCH
   });
 });
 
@@ -616,11 +655,11 @@ describe("Bitdap Multi Token - Approval System", () => {
     );
   });
 
-  it("should set approval for all tokens", () => {
+  it("should set approval for all tokens with enhanced parameters", () => {
     const { result } = simnet.callPublicFn(
       contractName,
       "set-approval-for-all",
-      [Cl.principal(wallet2), Cl.bool(true)],
+      [Cl.principal(wallet2), Cl.bool(true), Cl.none(), Cl.none()],
       wallet1
     );
     expect(result).toBeOk(Cl.bool(true));
@@ -640,7 +679,7 @@ describe("Bitdap Multi Token - Approval System", () => {
     simnet.callPublicFn(
       contractName,
       "set-approval-for-all",
-      [Cl.principal(wallet2), Cl.bool(true)],
+      [Cl.principal(wallet2), Cl.bool(true), Cl.none(), Cl.none()],
       wallet1
     );
 
@@ -648,7 +687,7 @@ describe("Bitdap Multi Token - Approval System", () => {
     const { result } = simnet.callPublicFn(
       contractName,
       "set-approval-for-all",
-      [Cl.principal(wallet2), Cl.bool(false)],
+      [Cl.principal(wallet2), Cl.bool(false), Cl.none(), Cl.none()],
       wallet1
     );
     expect(result).toBeOk(Cl.bool(true));
@@ -663,12 +702,12 @@ describe("Bitdap Multi Token - Approval System", () => {
     expect(approvalResult.result).toBeOk(Cl.bool(false));
   });
 
-  it("should set token-specific approval", () => {
+  it("should set token-specific approval with enhanced parameters", () => {
     const approvalAmount = 1000;
     const { result } = simnet.callPublicFn(
       contractName,
       "approve",
-      [Cl.principal(wallet2), Cl.uint(1), Cl.uint(approvalAmount)],
+      [Cl.principal(wallet2), Cl.uint(1), Cl.uint(approvalAmount), Cl.none(), Cl.none()],
       wallet1
     );
     expect(result).toBeOk(Cl.bool(true));
@@ -687,7 +726,7 @@ describe("Bitdap Multi Token - Approval System", () => {
     const { result } = simnet.callPublicFn(
       contractName,
       "set-approval-for-all",
-      [Cl.principal(wallet1), Cl.bool(true)],
+      [Cl.principal(wallet1), Cl.bool(true), Cl.none(), Cl.none()],
       wallet1
     );
     expect(result).toBeErr(Cl.uint(406)); // ERR-INVALID-RECIPIENT
