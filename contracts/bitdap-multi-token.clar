@@ -243,14 +243,55 @@
     )
 )
 
-;; Get multiple balances at once
-(define-read-only (get-balance-batch (account principal) (token-ids (list 20 uint)))
-    (ok (map get-balance-helper token-ids))
+;; Enhanced batch balance queries with error handling
+(define-read-only (get-balance-batch (accounts (list 20 principal)) (token-ids (list 20 uint)))
+    (ok (map get-balance-batch-helper (zip-accounts-tokens accounts token-ids)))
 )
 
-;; Helper for batch balance queries
-(define-private (get-balance-helper (token-id uint))
-    (default-to u0 (get balance (map-get? balances { account: tx-sender, token-id: token-id })))
+;; Helper for batch balance queries with account-token pairs
+(define-private (get-balance-batch-helper (item { account: principal, token-id: uint }))
+    {
+        account: (get account item),
+        token-id: (get token-id item),
+        balance: (default-to u0 (get balance (map-get? balances { account: (get account item), token-id: (get token-id item) })))
+    }
+)
+
+;; Zip accounts and tokens for batch operations
+(define-private (zip-accounts-tokens (accounts (list 20 principal)) (token-ids (list 20 uint)))
+    (map zip-account-token-helper accounts token-ids)
+)
+
+;; Helper for zipping accounts and tokens
+(define-private (zip-account-token-helper (account principal) (token-id uint))
+    { account: account, token-id: token-id }
+)
+
+;; Batch token existence check with detailed results
+(define-read-only (tokens-exist-batch (token-ids (list 20 uint)))
+    (ok (map token-exists-detailed-helper token-ids))
+)
+
+;; Detailed token existence helper
+(define-private (token-exists-detailed-helper (token-id uint))
+    {
+        token-id: token-id,
+        exists: (is-some (map-get? token-metadata { token-id: token-id })),
+        total-supply: (default-to u0 (get total-supply (map-get? token-metadata { token-id: token-id })))
+    }
+)
+
+;; Get multiple token metadata in one call
+(define-read-only (get-metadata-batch (token-ids (list 10 uint)))
+    (ok (map get-metadata-helper token-ids))
+)
+
+;; Helper for batch metadata queries
+(define-private (get-metadata-helper (token-id uint))
+    (match (map-get? token-metadata { token-id: token-id })
+        metadata (some metadata)
+        none
+    )
 )
 
 ;; Public functions
