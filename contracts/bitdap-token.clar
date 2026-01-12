@@ -17,15 +17,37 @@
 (define-constant TOKEN-DECIMALS u6)
 (define-constant TOKEN-MAX-SUPPLY u1000000000000) ;; 1 million tokens with 6 decimals
 
-;; Error codes
-(define-constant ERR-UNAUTHORIZED (err u401))
-(define-constant ERR-INSUFFICIENT-BALANCE (err u402))
-(define-constant ERR-INSUFFICIENT-ALLOWANCE (err u403))
-(define-constant ERR-INVALID-AMOUNT (err u404))
-(define-constant ERR-SELF-TRANSFER (err u405))
-(define-constant ERR-MAX-SUPPLY-EXCEEDED (err u406))
-(define-constant ERR-INVALID-RECIPIENT (err u407))
-(define-constant ERR-CONTRACT-PAUSED (err u408))
+;; Error codes - Comprehensive categorized system
+;; Validation Errors (100-199)
+(define-constant ERR-INVALID-AMOUNT (err u101))
+(define-constant ERR-INVALID-RECIPIENT (err u102))
+(define-constant ERR-SELF-TRANSFER (err u103))
+(define-constant ERR-ZERO-ADDRESS (err u104))
+(define-constant ERR-INVALID-PARAMETER (err u105))
+
+;; Authorization Errors (200-299)
+(define-constant ERR-UNAUTHORIZED (err u201))
+(define-constant ERR-NOT-OWNER (err u202))
+(define-constant ERR-INSUFFICIENT-ALLOWANCE (err u203))
+(define-constant ERR-FORBIDDEN-OPERATION (err u204))
+
+;; Business Logic Errors (300-399)
+(define-constant ERR-INSUFFICIENT-BALANCE (err u301))
+(define-constant ERR-MAX-SUPPLY-EXCEEDED (err u302))
+(define-constant ERR-CONTRACT-PAUSED (err u303))
+(define-constant ERR-TRANSFER-FAILED (err u304))
+(define-constant ERR-MINT-FAILED (err u305))
+(define-constant ERR-BURN-FAILED (err u306))
+
+;; Resource Errors (400-499)
+(define-constant ERR-BATCH-SIZE-EXCEEDED (err u401))
+(define-constant ERR-RATE-LIMIT-EXCEEDED (err u402))
+(define-constant ERR-OPERATION-LIMIT-EXCEEDED (err u403))
+
+;; System Errors (500-599)
+(define-constant ERR-INTERNAL-ERROR (err u501))
+(define-constant ERR-STATE-CORRUPTION (err u502))
+(define-constant ERR-UNEXPECTED-ERROR (err u503))
 
 ;; Data variables
 (define-data-var total-supply uint u0)
