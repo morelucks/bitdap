@@ -64,6 +64,12 @@
 ;; Owner -> Spender -> allowance
 (define-map allowances { owner: principal, spender: principal } uint)
 
+;; Rate limiting: Principal -> last operation block
+(define-map last-operation-block principal uint)
+
+;; Operation frequency tracking: Principal -> operation count in current block
+(define-map operation-count { user: principal, block: uint } uint)
+
 ;; Private functions
 
 ;; Enhanced event emission with metadata
@@ -96,6 +102,31 @@
 ;; Check if contract is not paused
 (define-private (is-not-paused)
     (not (var-get token-paused))
+)
+
+;; Rate limiting check - max 10 operations per block per user
+(define-private (check-rate-limit (user principal))
+    (let (
+        (current-block block-height)
+        (current-count (default-to u0 (map-get? operation-count { user: user, block: current-block })))
+    )
+        (if (< current-count u10)
+            (begin
+                (map-set operation-count { user: user, block: current-block } (+ current-count u1))
+                true
+            )
+            false
+        )
+    )
+)
+
+;; Enhanced validation for critical operations
+(define-private (validate-critical-operation (amount uint) (recipient principal))
+    (and
+        (is-valid-amount amount)
+        (not (is-eq recipient tx-sender))
+        (check-rate-limit tx-sender)
+    )
 )
 
 ;; Get balance for a principal (returns 0 if not found)
