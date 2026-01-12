@@ -508,3 +508,38 @@
         })
     )
 )
+
+;; Analytics and query functions
+
+;; Get contract statistics
+(define-read-only (get-contract-stats)
+    (ok {
+        total-supply: (var-get total-supply),
+        max-supply: TOKEN-MAX-SUPPLY,
+        contract-owner: (var-get contract-owner),
+        is-paused: (var-get token-paused),
+        operation-counter: (var-get operation-counter),
+        last-operation-block: (var-get last-operation-block),
+        supply-utilization: (/ (* (var-get total-supply) u100) TOKEN-MAX-SUPPLY)
+    })
+)
+
+;; Get user operation count for current block (for rate limiting transparency)
+(define-read-only (get-user-operation-count (user principal))
+    (ok (default-to u0 (map-get? operation-count { user: user, block: block-height })))
+)
+
+;; Check if user can perform operation (rate limit check)
+(define-read-only (can-user-operate (user principal))
+    (ok (< (default-to u0 (map-get? operation-count { user: user, block: block-height })) u10))
+)
+
+;; Get comprehensive user info
+(define-read-only (get-user-info (user principal))
+    (ok {
+        balance: (get-balance-or-default user),
+        operations-this-block: (default-to u0 (map-get? operation-count { user: user, block: block-height })),
+        can-operate: (< (default-to u0 (map-get? operation-count { user: user, block: block-height })) u10),
+        last-operation-block: (default-to u0 (map-get? last-operation-block user))
+    })
+)
