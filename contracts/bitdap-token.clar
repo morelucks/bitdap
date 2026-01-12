@@ -56,6 +56,9 @@
 (define-data-var token-uri (optional (string-utf8 256)) none)
 (define-data-var operation-counter uint u0)
 (define-data-var last-operation-block uint u0)
+(define-data-var transfers-paused bool false)
+(define-data-var minting-paused bool false)
+(define-data-var burning-paused bool false)
 
 ;; Data maps
 ;; Principal -> balance
@@ -102,6 +105,21 @@
 ;; Check if contract is not paused
 (define-private (is-not-paused)
     (not (var-get token-paused))
+)
+
+;; Check if transfers are not paused
+(define-private (are-transfers-enabled)
+    (and (is-not-paused) (not (var-get transfers-paused)))
+)
+
+;; Check if minting is not paused
+(define-private (is-minting-enabled)
+    (and (is-not-paused) (not (var-get minting-paused)))
+)
+
+;; Check if burning is not paused
+(define-private (is-burning-enabled)
+    (and (is-not-paused) (not (var-get burning-paused)))
 )
 
 ;; Rate limiting check - max 10 operations per block per user
@@ -162,8 +180,8 @@
 ;; Transfer tokens from sender to recipient
 (define-public (transfer (amount uint) (sender principal) (recipient principal) (memo (optional (buff 34))))
     (begin
-        ;; Check if contract is not paused
-        (asserts! (is-not-paused) ERR-CONTRACT-PAUSED)
+        ;; Check if transfers are enabled
+        (asserts! (are-transfers-enabled) ERR-CONTRACT-PAUSED)
         ;; Enhanced validation
         (asserts! (validate-critical-operation amount recipient) ERR-INVALID-PARAMETER)
         (asserts! (is-eq sender tx-sender) ERR-UNAUTHORIZED)
@@ -257,8 +275,8 @@
 ;; Transfer tokens from owner to recipient using allowance
 (define-public (transfer-from (owner principal) (recipient principal) (amount uint) (memo (optional (buff 34))))
     (begin
-        ;; Check if contract is not paused
-        (asserts! (is-not-paused) ERR-CONTRACT-PAUSED)
+        ;; Check if transfers are enabled
+        (asserts! (are-transfers-enabled) ERR-CONTRACT-PAUSED)
         ;; Enhanced validation
         (asserts! (is-valid-amount amount) ERR-INVALID-AMOUNT)
         (asserts! (not (is-eq owner recipient)) ERR-SELF-TRANSFER)
@@ -297,8 +315,8 @@
 ;; Mint new tokens (only contract owner)
 (define-public (mint (recipient principal) (amount uint))
     (begin
-        ;; Check if contract is not paused
-        (asserts! (is-not-paused) ERR-CONTRACT-PAUSED)
+        ;; Check if minting is enabled
+        (asserts! (is-minting-enabled) ERR-CONTRACT-PAUSED)
         ;; Enhanced authorization check
         (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-NOT-OWNER)
         (asserts! (is-valid-amount amount) ERR-INVALID-AMOUNT)
@@ -336,8 +354,8 @@
 ;; Burn tokens from sender's balance
 (define-public (burn (amount uint))
     (begin
-        ;; Check if contract is not paused
-        (asserts! (is-not-paused) ERR-CONTRACT-PAUSED)
+        ;; Check if burning is enabled
+        (asserts! (is-burning-enabled) ERR-CONTRACT-PAUSED)
         (asserts! (is-valid-amount amount) ERR-INVALID-AMOUNT)
         (asserts! (check-rate-limit tx-sender) ERR-RATE-LIMIT-EXCEEDED)
         
@@ -451,7 +469,7 @@
 ;; Batch transfer function - transfer to multiple recipients
 (define-public (batch-transfer (recipients (list 10 { recipient: principal, amount: uint })) (memo (optional (buff 34))))
     (begin
-        (asserts! (is-not-paused) ERR-CONTRACT-PAUSED)
+        (asserts! (are-transfers-enabled) ERR-CONTRACT-PAUSED)
         (asserts! (check-rate-limit tx-sender) ERR-RATE-LIMIT-EXCEEDED)
         (asserts! (<= (len recipients) u10) ERR-BATCH-SIZE-EXCEEDED)
         
@@ -542,4 +560,59 @@
         can-operate: (< (default-to u0 (map-get? operation-count { user: user, block: block-height })) u10),
         last-operation-block: (default-to u0 (map-get? last-operation-block user))
     })
+)
+
+;; Granular pause controls (only owner)
+(define-public (pause-transfers)
+    (begin
+        (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-NOT-OWNER)
+        (var-set transfers-paused true)
+        (emit-event "pause-transfers" { actor: tx-sender })
+        (ok true)
+    )
+)
+
+(define-public (unpause-transfers)
+    (begin
+        (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-NOT-OWNER)
+        (var-set transfers-paused false)
+        (emit-event "unpause-transfers" { actor: tx-sender })
+        (ok true)
+    )
+)
+
+(define-public (pause-minting)
+    (begin
+        (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-NOT-OWNER)
+        (var-set minting-paused true)
+        (emit-event "pause-minting" { actor: tx-sender })
+        (ok true)
+    )
+)
+
+(define-public (unpause-minting)
+    (begin
+        (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-NOT-OWNER)
+        (var-set minting-paused false)
+        (emit-event "unpause-minting" { actor: tx-sender })
+        (ok true)
+    )
+)
+
+(define-public (pause-burning)
+    (begin
+        (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-NOT-OWNER)
+        (var-set burning-paused true)
+        (emit-event "pause-burning" { actor: tx-sender })
+        (ok true)
+    )
+)
+
+(define-public (unpause-burning)
+    (begin
+        (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-NOT-OWNER)
+        (var-set burning-paused false)
+        (emit-event "unpause-burning" { actor: tx-sender })
+        (ok true)
+    )
 )
