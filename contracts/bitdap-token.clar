@@ -448,6 +448,54 @@
     (ok (var-get token-uri))
 )
 
+;; Batch transfer function - transfer to multiple recipients
+(define-public (batch-transfer (recipients (list 10 { recipient: principal, amount: uint })) (memo (optional (buff 34))))
+    (begin
+        (asserts! (is-not-paused) ERR-CONTRACT-PAUSED)
+        (asserts! (check-rate-limit tx-sender) ERR-RATE-LIMIT-EXCEEDED)
+        (asserts! (<= (len recipients) u10) ERR-BATCH-SIZE-EXCEEDED)
+        
+        (let (
+            (total-amount (fold + (map get-amount recipients) u0))
+            (sender-balance (get-balance-or-default tx-sender))
+        )
+            (asserts! (>= sender-balance total-amount) ERR-INSUFFICIENT-BALANCE)
+            
+            ;; Process all transfers
+            (map process-batch-transfer recipients)
+            
+            ;; Emit batch event
+            (emit-event "batch-transfer" {
+                actor: tx-sender,
+                recipient-count: (len recipients),
+                total-amount: total-amount,
+                memo: memo
+            })
+            
+            (ok true)
+        )
+    )
+)
+
+;; Helper function to get amount from recipient tuple
+(define-private (get-amount (recipient-data { recipient: principal, amount: uint }))
+    (get amount recipient-data)
+)
+
+;; Helper function to process individual batch transfer
+(define-private (process-batch-transfer (recipient-data { recipient: principal, amount: uint }))
+    (let (
+        (recipient (get recipient recipient-data))
+        (amount (get amount recipient-data))
+    )
+        (begin
+            (set-balance tx-sender (- (get-balance-or-default tx-sender) amount))
+            (set-balance recipient (+ (get-balance-or-default recipient) amount))
+            true
+        )
+    )
+)
+
 ;; Initialize contract with initial supply to deployer
 (begin
     (let ((initial-supply u1000000000)) ;; 1000 tokens with 6 decimals
