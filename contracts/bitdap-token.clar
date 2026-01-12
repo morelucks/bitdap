@@ -164,9 +164,8 @@
     (begin
         ;; Check if contract is not paused
         (asserts! (is-not-paused) ERR-CONTRACT-PAUSED)
-        ;; Validate inputs
-        (asserts! (is-valid-amount amount) ERR-INVALID-AMOUNT)
-        (asserts! (not (is-eq sender recipient)) ERR-SELF-TRANSFER)
+        ;; Enhanced validation
+        (asserts! (validate-critical-operation amount recipient) ERR-INVALID-PARAMETER)
         (asserts! (is-eq sender tx-sender) ERR-UNAUTHORIZED)
         
         (let (
@@ -179,12 +178,13 @@
             (set-balance sender (- sender-balance amount))
             (set-balance recipient (+ (get-balance-or-default recipient) amount))
             
-            ;; Print transfer event
-            (print {
-                action: "transfer",
-                sender: sender,
+            ;; Emit enhanced event
+            (emit-event "token-transfer" {
+                actor: sender,
                 recipient: recipient,
                 amount: amount,
+                sender-balance-after: (- sender-balance amount),
+                recipient-balance-after: (+ (get-balance-or-default recipient) amount),
                 memo: memo
             })
             
