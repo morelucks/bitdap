@@ -339,24 +339,29 @@
         ;; Check if contract is not paused
         (asserts! (is-not-paused) ERR-CONTRACT-PAUSED)
         (asserts! (is-valid-amount amount) ERR-INVALID-AMOUNT)
+        (asserts! (check-rate-limit tx-sender) ERR-RATE-LIMIT-EXCEEDED)
         
         (let (
             (sender-balance (get-balance-or-default tx-sender))
             (current-supply (var-get total-supply))
+            (new-supply (- current-supply amount))
+            (new-sender-balance (- sender-balance amount))
         )
             ;; Check sufficient balance
             (asserts! (>= sender-balance amount) ERR-INSUFFICIENT-BALANCE)
             
             ;; Update balance and total supply
-            (set-balance tx-sender (- sender-balance amount))
-            (var-set total-supply (- current-supply amount))
+            (set-balance tx-sender new-sender-balance)
+            (var-set total-supply new-supply)
             
-            ;; Print burn event
-            (print {
-                action: "burn",
-                sender: tx-sender,
+            ;; Emit enhanced event
+            (emit-event "token-burn" {
+                actor: tx-sender,
                 amount: amount,
-                new-supply: (- current-supply amount)
+                new-supply: new-supply,
+                previous-supply: current-supply,
+                sender-balance-before: sender-balance,
+                sender-balance-after: new-sender-balance
             })
             
             (ok true)
