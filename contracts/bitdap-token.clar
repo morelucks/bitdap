@@ -299,28 +299,33 @@
     (begin
         ;; Check if contract is not paused
         (asserts! (is-not-paused) ERR-CONTRACT-PAUSED)
-        ;; Only contract owner can mint
-        (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-UNAUTHORIZED)
+        ;; Enhanced authorization check
+        (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-NOT-OWNER)
         (asserts! (is-valid-amount amount) ERR-INVALID-AMOUNT)
+        (asserts! (check-rate-limit tx-sender) ERR-RATE-LIMIT-EXCEEDED)
         
         (let (
             (current-supply (var-get total-supply))
             (new-supply (+ current-supply amount))
             (recipient-balance (get-balance-or-default recipient))
+            (new-recipient-balance (+ recipient-balance amount))
         )
             ;; Check max supply
             (asserts! (<= new-supply TOKEN-MAX-SUPPLY) ERR-MAX-SUPPLY-EXCEEDED)
             
             ;; Update total supply and recipient balance
             (var-set total-supply new-supply)
-            (set-balance recipient (+ recipient-balance amount))
+            (set-balance recipient new-recipient-balance)
             
-            ;; Print mint event
-            (print {
-                action: "mint",
+            ;; Emit enhanced event
+            (emit-event "token-mint" {
+                actor: tx-sender,
                 recipient: recipient,
                 amount: amount,
-                new-supply: new-supply
+                new-supply: new-supply,
+                previous-supply: current-supply,
+                recipient-balance-before: recipient-balance,
+                recipient-balance-after: new-recipient-balance
             })
             
             (ok true)
