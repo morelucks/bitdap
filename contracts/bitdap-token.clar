@@ -54,6 +54,8 @@
 (define-data-var contract-owner principal CONTRACT-OWNER)
 (define-data-var token-paused bool false)
 (define-data-var token-uri (optional (string-utf8 256)) none)
+(define-data-var operation-counter uint u0)
+(define-data-var last-operation-block uint u0)
 
 ;; Data maps
 ;; Principal -> balance
@@ -63,6 +65,28 @@
 (define-map allowances { owner: principal, spender: principal } uint)
 
 ;; Private functions
+
+;; Enhanced event emission with metadata
+(define-private (emit-event (event-type (string-ascii 32)) (event-data (tuple (actor principal))))
+    (let (
+        (operation-id (+ (var-get operation-counter) u1))
+        (current-block block-height)
+    )
+        (var-set operation-counter operation-id)
+        (var-set last-operation-block current-block)
+        (print (merge 
+            {
+                event-type: event-type,
+                operation-id: operation-id,
+                timestamp: current-block,
+                block-height: current-block,
+                transaction-sender: tx-sender
+            }
+            event-data
+        ))
+        true
+    )
+)
 
 ;; Check if amount is valid (greater than 0)
 (define-private (is-valid-amount (amount uint))
