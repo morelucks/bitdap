@@ -259,9 +259,10 @@
     (begin
         ;; Check if contract is not paused
         (asserts! (is-not-paused) ERR-CONTRACT-PAUSED)
-        ;; Validate inputs
+        ;; Enhanced validation
         (asserts! (is-valid-amount amount) ERR-INVALID-AMOUNT)
         (asserts! (not (is-eq owner recipient)) ERR-SELF-TRANSFER)
+        (asserts! (check-rate-limit tx-sender) ERR-RATE-LIMIT-EXCEEDED)
         
         (let (
             (owner-balance (get-balance-or-default owner))
@@ -276,13 +277,15 @@
             (set-balance recipient (+ (get-balance-or-default recipient) amount))
             (set-allowance owner tx-sender (- current-allowance amount))
             
-            ;; Print transfer event
-            (print {
-                action: "transfer-from",
+            ;; Emit enhanced event
+            (emit-event "token-transfer-from" {
+                actor: tx-sender,
                 owner: owner,
                 recipient: recipient,
-                spender: tx-sender,
                 amount: amount,
+                remaining-allowance: (- current-allowance amount),
+                owner-balance-after: (- owner-balance amount),
+                recipient-balance-after: (+ (get-balance-or-default recipient) amount),
                 memo: memo
             })
             
