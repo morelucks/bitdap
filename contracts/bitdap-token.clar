@@ -390,12 +390,13 @@
 ;; Transfer contract ownership (only current owner)
 (define-public (transfer-ownership (new-owner principal))
     (begin
-        (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-UNAUTHORIZED)
+        (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-NOT-OWNER)
+        (asserts! (check-rate-limit tx-sender) ERR-RATE-LIMIT-EXCEEDED)
         (let ((old-owner tx-sender))
             (var-set contract-owner new-owner)
             
-            (print {
-                action: "transfer-ownership",
+            (emit-event "transfer-ownership" {
+                actor: old-owner,
                 old-owner: old-owner,
                 new-owner: new-owner
             })
@@ -413,13 +414,10 @@
 ;; Pause contract (only owner)
 (define-public (pause)
     (begin
-        (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-UNAUTHORIZED)
+        (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-NOT-OWNER)
         (var-set token-paused true)
         
-        (print {
-            action: "pause",
-            caller: tx-sender
-        })
+        (emit-event "global-pause" { actor: tx-sender })
         
         (ok true)
     )
@@ -428,13 +426,10 @@
 ;; Unpause contract (only owner)
 (define-public (unpause)
     (begin
-        (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-UNAUTHORIZED)
+        (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-NOT-OWNER)
         (var-set token-paused false)
         
-        (print {
-            action: "unpause",
-            caller: tx-sender
-        })
+        (emit-event "global-unpause" { actor: tx-sender })
         
         (ok true)
     )
@@ -443,12 +438,12 @@
 ;; Set token URI (only owner)
 (define-public (set-token-uri (new-uri (optional (string-utf8 256))))
     (begin
-        (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-UNAUTHORIZED)
+        (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-NOT-OWNER)
+        (asserts! (check-rate-limit tx-sender) ERR-RATE-LIMIT-EXCEEDED)
         (var-set token-uri new-uri)
         
-        (print {
-            action: "set-token-uri",
-            caller: tx-sender,
+        (emit-event "set-token-uri" {
+            actor: tx-sender,
             new-uri: new-uri
         })
         
@@ -536,9 +531,26 @@
         max-supply: TOKEN-MAX-SUPPLY,
         contract-owner: (var-get contract-owner),
         is-paused: (var-get token-paused),
+        transfers-paused: (var-get transfers-paused),
+        minting-paused: (var-get minting-paused),
+        burning-paused: (var-get burning-paused),
         operation-counter: (var-get operation-counter),
         last-operation-block: (var-get last-operation-block),
-        supply-utilization: (/ (* (var-get total-supply) u100) TOKEN-MAX-SUPPLY)
+        supply-utilization: (/ (* (var-get total-supply) u100) TOKEN-MAX-SUPPLY),
+        current-block: block-height
+    })
+)
+
+;; Get pause status for all operations
+(define-read-only (get-pause-status)
+    (ok {
+        global-pause: (var-get token-paused),
+        transfers-paused: (var-get transfers-paused),
+        minting-paused: (var-get minting-paused),
+        burning-paused: (var-get burning-paused),
+        transfers-enabled: (are-transfers-enabled),
+        minting-enabled: (is-minting-enabled),
+        burning-enabled: (is-burning-enabled)
     })
 )
 
