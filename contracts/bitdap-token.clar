@@ -230,18 +230,19 @@
     (begin
         ;; Check if contract is not paused
         (asserts! (is-not-paused) ERR-CONTRACT-PAUSED)
-        ;; Validate inputs
+        ;; Enhanced validation
         (asserts! (not (is-eq spender tx-sender)) ERR-INVALID-RECIPIENT)
+        (asserts! (check-rate-limit tx-sender) ERR-RATE-LIMIT-EXCEEDED)
         
         ;; Set allowance (amount is validated by being uint type)
         (set-allowance tx-sender spender amount)
         
-        ;; Print approval event
-        (print {
-            action: "approve",
-            owner: tx-sender,
+        ;; Emit enhanced event
+        (emit-event "token-approval" {
+            actor: tx-sender,
             spender: spender,
-            amount: amount
+            amount: amount,
+            previous-allowance: (get-allowance-or-default tx-sender spender)
         })
         
         (ok true)
